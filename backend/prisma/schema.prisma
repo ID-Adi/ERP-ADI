@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// --- CORE & AUTH ---
+
+model Company {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  website   String?
+  logo      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  users     User[]
+  contacts  Contact[]
+  items     Item[]
+  salesOrders SalesOrder[]
+}
+
+model User {
+  id        String   @id @default(uuid())
+  companyId String
+  email     String   @unique
+  password  String   // Hashed
+  name      String
+  role      UserRole @default(STAFF)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company  @relation(fields: [companyId], references: [id])
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+// --- MASTER DATA ---
+
+model Contact {
+  id          String      @id @default(uuid())
+  companyId   String
+  code        String
+  name        String
+  type        ContactType // CUSTOMER, VENDOR, BOTH
+  email       String?
+  phone       String?
+  mobile      String?
+  address     String?
+  city        String?
+  state       String?
+  zipCode     String?
+  country     String?
+  notes       String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  company     Company     @relation(fields: [companyId], references: [id])
+  salesOrders SalesOrder[]
+
+  @@unique([companyId, code])
+}
+
+enum ContactType {
+  CUSTOMER
+  VENDOR
+  BOTH
+}
+
+model Item {
+  id          String   @id @default(uuid())
+  companyId   String
+  code        String
+  name        String
+  description String?
+  barcode     String?
+  uom         String   @default("PCS")
+  categoryId  String?
+  
+  // Pricing
+  purchasePrice Decimal @default(0) @db.Decimal(15, 2)
+  sellPrice     Decimal @default(0) @db.Decimal(15, 2)
+  
+  // Stock
+  isStockItem Boolean   @default(true)
+  minStock    Decimal   @default(0)
+  
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  company     Company   @relation(fields: [companyId], references: [id])
+  salesOrderLines SalesOrderLine[]
+
+  @@unique([companyId, code])
+}
+
+// --- SALES MODULE ---
+
+model SalesOrder {
+  id           String      @id @default(uuid())
+  companyId    String
+  orderNumber  String
+  orderDate    DateTime
+  dueDate      DateTime?
+  
+  customerId   String
+  customer     Contact     @relation(fields: [customerId], references: [id])
+  
+  status       OrderStatus @default(DRAFT)
+  
+  // Financials
+  currency     String      @default("IDR")
+  subtotal     Decimal     @db.Decimal(15, 2)
+  discountPercent Decimal  @default(0) @db.Decimal(5, 2)
+  discountAmount  Decimal  @default(0) @db.Decimal(15, 2)
+  taxPercent      Decimal  @default(0) @db.Decimal(5, 2)
+  taxAmount       Decimal  @default(0) @db.Decimal(15, 2)
+  totalAmount     Decimal  @db.Decimal(15, 2)
+  
+  notes        String?
+  
+  // Audit
+  createdBy    String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  company      Company     @relation(fields: [companyId], references: [id])
+  lines        SalesOrderLine[]
+
+  @@unique([companyId, orderNumber])
+}
+
+model SalesOrderLine {
+  id           String      @id @default(uuid())
+  salesOrderId String
+  itemId       String?
+  description  String // Item name or custom description
+  
+  quantity     Decimal     @db.Decimal(10, 2)
+  unitPrice    Decimal     @db.Decimal(15, 2)
+  discountPercent Decimal  @default(0) @db.Decimal(5, 2)
+  amount       Decimal     @db.Decimal(15, 2)
+  
+  notes        String?
+
+  salesOrder   SalesOrder  @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  item         Item?       @relation(fields: [itemId], references: [id])
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PROCESSING
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
