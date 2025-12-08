@@ -1,7 +1,9 @@
 'use client';
 
-import { Bell, Search, Menu, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Bell, Search, Menu, ChevronsLeft, ChevronsRight, LogOut, User as UserIcon } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { useAuth } from '@/contexts/AuthContext';
+import { useState, useRef, useEffect } from 'react';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -10,6 +12,20 @@ interface HeaderProps {
 }
 
 export default function Header({ onMenuClick, onCollapseSidebar, sidebarCollapsed }: HeaderProps) {
+  const { user, logout } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   return (
     <header className="h-14 bg-surface-50/80 backdrop-blur-sm border-b border-surface-300/50 sticky top-0 z-30 flex items-center px-4 lg:px-6 gap-4">
       {/* Left Side - Menu & Search */}
@@ -58,14 +74,44 @@ export default function Header({ onMenuClick, onCollapseSidebar, sidebarCollapse
         <div className="w-px h-6 bg-surface-300 hidden sm:block" />
 
         {/* Profile */}
-        <div className="flex items-center gap-3 pl-2 lg:pl-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
-            <span className="text-white font-medium text-sm">A</span>
-          </div>
-          <div className="hidden lg:block">
-            <p className="text-sm font-medium text-warmgray-900">Admin</p>
-            <p className="text-xs text-warmgray-500">Administrator</p>
-          </div>
+        <div className="relative" ref={profileRef}>
+          <button
+            onClick={() => setProfileOpen(!profileOpen)}
+            className="flex items-center gap-3 pl-2 lg:pl-3 hover:bg-surface-200 rounded-xl p-1 transition-all"
+          >
+            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+              <span className="text-white font-medium text-sm">
+                {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
+              </span>
+            </div>
+            <div className="hidden lg:block text-left">
+              <p className="text-sm font-medium text-warmgray-900">{user?.name || 'User'}</p>
+              <p className="text-xs text-warmgray-500">{user?.role || 'Staff'}</p>
+            </div>
+          </button>
+
+          {/* Dropdown */}
+          {profileOpen && (
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-surface-200 py-1 z-50 animate-in fade-in slide-in-from-top-2">
+              <div className="px-4 py-2 border-b border-surface-100 lg:hidden">
+                <p className="text-sm font-medium text-warmgray-900">{user?.name}</p>
+                <p className="text-xs text-warmgray-500">{user?.role}</p>
+              </div>
+
+              <button className="w-full text-left px-4 py-2 text-sm text-warmgray-700 hover:bg-surface-100 flex items-center gap-2">
+                <UserIcon className="w-4 h-4" />
+                Profile
+              </button>
+
+              <button
+                onClick={logout}
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

@@ -2,20 +2,33 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, Calculator } from 'lucide-react';
-import { Button, Input, Card, useToast } from '@/components/ui';
-import { formatCurrency } from '@/lib/utils';
+import {
+  FileText, Package, List, AlignLeft, Search, Calendar, User, Hash,
+  Settings, ChevronRight, Calculator, AlertCircle, DollarSign, History, Trash2
+} from 'lucide-react';
+import { Button, useToast } from '@/components/ui';
+import api from '@/lib/api';
+import { formatCurrency, cn } from '@/lib/utils';
 
+// Import Views
+import InvoiceItemsView from './invoice/InvoiceItemsView';
+import InvoiceInfoView from './invoice/InvoiceInfoView';
+import InvoiceCostsView from './invoice/InvoiceCostsView';
+import InvoiceHistoryView from './invoice/InvoiceHistoryView';
+
+// --- Interfaces ---
 interface LineItem {
   id: string;
+  itemId?: string; // Database ID for backend
   itemCode: string;
   description: string;
   quantity: number;
+  unit: string;
   unitPrice: number;
   discountPercent: number;
+  discountAmount: number;
   taxPercent: number;
   lineAmount: number;
-  discountAmount: number;
   taxAmount: number;
   totalAmount: number;
 }
@@ -23,396 +36,554 @@ interface LineItem {
 interface InvoiceFormProps {
   initialData: {
     vendorCode: string;
-    invoiceDate: string;
+    fakturDate: string;
     dueDate: string;
     memo: string;
     lines: LineItem[];
+    currency?: string;
+    fakturNumber?: string;
+    id?: string;
   };
   onDataChange: (data: any) => void;
   onSave: () => void;
+  // Legacy props compatibility
   tabLabel?: string;
   onTabLabelChange?: (label: string) => void;
 }
 
-// Dummy data
-const dummyItems = [
-  { code: 'ITEM-001', name: 'Product A', price: 100000 },
-  { code: 'ITEM-002', name: 'Product B', price: 250000 },
-  { code: 'ITEM-003', name: 'Service Consultation', price: 500000 },
-  { code: 'ITEM-004', name: 'Training Package', price: 1500000 },
-];
+import CustomerSelect from './invoice/CustomerSelect';
 
-const dummyCustomers = [
-  { code: 'CUST-00001', name: 'PT Maju Jaya' },
-  { code: 'CUST-00002', name: 'CV Berkah Sejahtera' },
-  { code: 'CUST-00003', name: 'PT Global Indonesia' },
-];
+type ViewType = 'items' | 'info' | 'costs' | 'history';
 
 export default function InvoiceForm({
   initialData,
   onDataChange,
   onSave,
-  tabLabel,
-  onTabLabelChange,
 }: InvoiceFormProps) {
   const router = useRouter();
   const { addToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [activeView, setActiveView] = useState<ViewType>('items');
 
-  const [formData, setFormData] = useState(initialData);
-  const [lines, setLines] = useState<LineItem[]>(initialData.lines);
+  // State for manual invoice number toggle
+  const [isManualFaktur, setIsManualFaktur] = useState(false);
+
+  // Data State
+  const [customers, setCustomers] = useState<any[]>([]);
+
+  // Centralized State
+  const [formData, setFormData] = useState({
+    ...initialData,
+    currency: initialData.currency || 'IDR',
+    fakturNumber: initialData.fakturNumber || 'Auto-Generated'
+  });
+
+  const [lines, setLines] = useState<LineItem[]>(initialData.lines || []);
+
+  // Fetch Customers
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const response = await api.get('/customers');
+        setCustomers(response.data.data || []);
+      } catch (error) {
+        console.error('Failed to fetch customers:', error);
+      }
+    };
+    fetchCustomers();
+  }, []);
+
+  // Calculations State
   const [totals, setTotals] = useState({
     subtotal: 0,
-    totalDiscount: 0,
-    totalTax: 0,
+    discountTotal: 0, // Item level discounts
+    globalDiscount: 0,
+    taxTotal: 0,
     grandTotal: 0,
   });
 
-  // Calculate line item amounts
-  const calculateLine = (line: LineItem): LineItem => {
-    const lineAmount = line.quantity * line.unitPrice;
-    const discountAmount = (lineAmount * line.discountPercent) / 100;
-    const taxableAmount = lineAmount - discountAmount;
-    const taxAmount = (taxableAmount * line.taxPercent) / 100;
-    const totalAmount = taxableAmount + taxAmount;
-
-    return {
-      ...line,
-      lineAmount,
-      discountAmount,
-      taxAmount,
-      totalAmount,
-    };
-  };
-
-  // Calculate invoice totals
+  // --- Effects ---
   useEffect(() => {
-    const subtotal = lines.reduce((sum, line) => sum + line.lineAmount, 0);
-    const totalDiscount = lines.reduce((sum, line) => sum + line.discountAmount, 0);
-    const totalTax = lines.reduce((sum, line) => sum + line.taxAmount, 0);
-    const grandTotal = lines.reduce((sum, line) => sum + line.totalAmount, 0);
+    // Recalculate Totals
+    const subtotal = lines.reduce((sum, line) => sum + (line.quantity * line.unitPrice), 0);
+    const itemDiscounts = lines.reduce((sum, line) => sum + line.discountAmount, 0);
+    const taxableBase = subtotal - itemDiscounts; // Simplified tax base
+    const tax = lines.reduce((sum, line) => sum + line.taxAmount, 0) || (taxableBase * 0.11); // Fallback to 11% if line tax is 0 or not calc'd
+    const grandTotal = subtotal - itemDiscounts + tax;
 
-    setTotals({ subtotal, totalDiscount, totalTax, grandTotal });
+    setTotals({
+      subtotal,
+      discountTotal: itemDiscounts,
+      globalDiscount: 0,
+      taxTotal: tax,
+      grandTotal
+    });
 
-    // Notify parent about data change
     const newData = { ...formData, lines };
-    setFormData(newData);
     onDataChange(newData);
+  }, [lines, formData.vendorCode, formData.fakturDate, formData.dueDate, formData.memo, formData.currency]);
 
-    // Update tab label dengan customer dan total
-    if (onTabLabelChange && formData.vendorCode) {
-      const customer = dummyCustomers.find((c) => c.code === formData.vendorCode);
-      const customerName = customer?.name || 'Invoice';
-      const total = formatCurrency(grandTotal);
-      onTabLabelChange(`${customerName} - ${total}`);
-    }
-  }, [lines, formData.vendorCode, onTabLabelChange, formData]);
-
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    const newData = { ...formData, [name]: value };
-    setFormData(newData);
-    onDataChange(newData);
-
-    // Update tab label saat customer dipilih
-    if (name === 'vendorCode' && onTabLabelChange) {
-      const customer = dummyCustomers.find((c) => c.code === value);
-      const customerName = customer?.name || 'Invoice';
-      const total = formatCurrency(totals.grandTotal);
-      onTabLabelChange(`${customerName} - ${total}`);
+  // Handle Manual Faktur Toggle
+  const handleManualFakturToggle = () => {
+    const newState = !isManualFaktur;
+    setIsManualFaktur(newState);
+    if (!newState) {
+      // Reset to Auto if turned off
+      setFormData(prev => ({ ...prev, fakturNumber: 'Auto-Generated' }));
+    } else {
+      // Clear for manual input if turning on (or keep existing if not auto)
+      if (formData.fakturNumber === 'Auto-Generated') {
+        setFormData(prev => ({ ...prev, fakturNumber: '' }));
+      }
     }
   };
 
-  const handleLineChange = (index: number, field: keyof LineItem, value: any) => {
-    const newLines = [...lines];
-    newLines[index] = { ...newLines[index], [field]: value };
-    newLines[index] = calculateLine(newLines[index]);
-    setLines(newLines);
+
+  // --- Handlers ---
+  const handleFormChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleItemSelect = (index: number, itemCode: string) => {
-    const item = dummyItems.find((i) => i.code === itemCode);
-    if (item) {
-      handleLineChange(index, 'itemCode', itemCode);
-      handleLineChange(index, 'description', item.name);
-      handleLineChange(index, 'unitPrice', item.price);
-    }
+  const handleCustomerSelect = (code: string) => {
+    setFormData(prev => ({ ...prev, vendorCode: code }));
   };
 
-  const addLine = () => {
-    setLines([
-      ...lines,
-      {
-        id: Date.now().toString(),
-        itemCode: '',
-        description: '',
-        quantity: 1,
-        unitPrice: 0,
-        discountPercent: 0,
-        taxPercent: 11,
-        lineAmount: 0,
-        discountAmount: 0,
-        taxAmount: 0,
-        totalAmount: 0,
-      },
-    ]);
+  const handleVendorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFormData(prev => ({ ...prev, vendorCode: e.target.value }));
   };
 
-  const removeLine = (index: number) => {
-    if (lines.length > 1) {
-      setLines(lines.filter((_, i) => i !== index));
-    }
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      // Find the selected customer to get customer ID
+      const selectedCustomer = customers.find(c => c.code === formData.vendorCode);
+
+      if (!selectedCustomer) {
+        addToast({
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Please select a customer before saving.',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (lines.length === 0) {
+        addToast({
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Please add at least one item before saving.',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Build payload for API
+      const payload = {
+        companyId: 'default-company', // TODO: Get from auth context
+        fakturNumber: isManualFaktur ? formData.fakturNumber : undefined, // Let backend generate if not manual
+        fakturDate: formData.fakturDate,
+        dueDate: formData.dueDate || null,
+        customerId: selectedCustomer.id,
+        currency: formData.currency || 'IDR',
+        subtotal: totals.subtotal,
+        discountPercent: 0,
+        discountAmount: totals.discountTotal,
+        taxPercent: 11,
+        taxAmount: totals.taxTotal,
+        totalAmount: totals.grandTotal,
+        balanceDue: totals.grandTotal,
+        notes: formData.memo || '',
+        status: 'UNPAID', // Default to UNPAID (Belum Lunas) instead of DRAFT
+        createdBy: 'admin', // TODO: Get from auth context
+        lines: lines.map(line => ({
+          itemId: line.itemId, // Use the actual database ID stored from product selection
+          description: line.description,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discountPercent: line.discountPercent,
+          amount: line.lineAmount
+        }))
+      };
+
+      if (initialData.id) {
+        // Update existing invoice
+        await api.put(`/fakturs/${initialData.id}`, payload);
+        addToast({
+          type: 'success',
+          title: 'Faktur Diperbarui',
+          message: 'Perubahan faktur berhasil disimpan.',
+        });
+      } else {
+        // Create new invoice
+        await api.post('/fakturs', payload);
+        addToast({
+          type: 'success',
+          title: 'Faktur Tersimpan',
+          message: 'Faktur berhasil disimpan ke database.',
+        });
+      }
+      onSave();
+      router.push('/dashboard/sales/faktur');
+    } catch (error: any) {
+      console.error('Failed to save invoice:', error);
+      addToast({
+        type: 'error',
+        title: 'Gagal Menyimpan',
+        message: error?.response?.data?.error || 'Terjadi kesalahan saat menyimpan faktur.',
+      });
+    } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Delete Handler
+  const handleDelete = async () => {
+    if (!initialData.id) return;
+    if (!confirm('Apakah Anda yakin ingin menghapus faktur ini?')) return;
+
+    setIsLoading(true);
+    try {
+      await api.delete(`/fakturs/${initialData.id}`);
       addToast({
         type: 'success',
-        title: 'Invoice Saved',
-        message: 'Invoice has been saved successfully.',
+        title: 'Faktur Dihapus',
+        message: 'Faktur berhasil dihapus.',
       });
-      onSave();
-      router.push('/dashboard/sales/invoices');
-    }, 1500);
+      onSave(); // Trigger refresh on parent
+      router.push('/dashboard/sales/faktur');
+    } catch (error) {
+      console.error('Failed to delete invoice:', error);
+      addToast({
+        type: 'error',
+        title: 'Gagal Menghapus',
+        message: 'Gagal menghapus faktur.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Draft Handler (Create Only)
+  const handleSaveDraft = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const selectedCustomer = customers.find(c => c.code === formData.vendorCode);
+      const payload = {
+        companyId: 'default-company',
+        fakturNumber: isManualFaktur ? formData.fakturNumber : undefined,
+        fakturDate: formData.fakturDate,
+        dueDate: formData.dueDate || null,
+        customerId: selectedCustomer?.id || undefined,
+        status: 'DRAFT',
+        currency: formData.currency || 'IDR',
+        subtotal: totals.subtotal,
+        totalAmount: totals.grandTotal,
+        balanceDue: totals.grandTotal,
+        lines: lines.map(line => ({
+          itemId: line.itemId,
+          description: line.description,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          amount: line.lineAmount
+        }))
+      };
+      await api.post('/fakturs', payload);
+      addToast({ type: 'success', title: 'Draf Tersimpan', message: 'Faktur draf berhasil disimpan.' });
+      router.push('/dashboard/sales/faktur');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 pb-24">
-      {/* Header Info - Compact Grid */}
-      <Card title="Invoice Header" className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <div className="md:col-span-2">
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
-              Customer <span className="text-danger-600">*</span>
-            </label>
-            <select
-              name="vendorCode"
-              value={formData.vendorCode}
-              onChange={handleFormChange}
-              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded input-glow transition-all duration-200"
-              required
-            >
-              <option value="">Select Customer</option>
-              {dummyCustomers.map((customer) => (
-                <option key={customer.code} value={customer.code}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
-          </div>
+    <div className="flex h-full bg-[#f0f2f5] overflow-hidden font-sans">
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
-              Invoice Date <span className="text-danger-600">*</span>
-            </label>
-            <input
-              type="date"
-              name="invoiceDate"
-              value={formData.invoiceDate}
-              onChange={handleFormChange}
-              required
-              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded input-glow transition-all duration-200"
-            />
-          </div>
+      {/* 1. Left Sidebar Navigation */}
+      <div className="w-[60px] flex-shrink-0 bg-white border-r border-warmgray-200 flex flex-col items-center py-4 gap-4 z-40">
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
-              Due Date <span className="text-danger-600">*</span>
-            </label>
-            <input
-              type="date"
-              name="dueDate"
-              value={formData.dueDate}
-              onChange={handleFormChange}
-              required
-              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded input-glow transition-all duration-200"
-            />
-          </div>
-        </div>
-      </Card>
+        <SidebarButton
+          active={activeView === 'items'}
+          onClick={() => setActiveView('items')}
+          icon={Package}
+          label="Rincian Barang"
+        />
+        <SidebarButton
+          active={activeView === 'info'}
+          onClick={() => setActiveView('info')}
+          icon={AlertCircle}
+          label="Info Lainnya"
+        />
+        <SidebarButton
+          active={activeView === 'costs'}
+          onClick={() => setActiveView('costs')}
+          icon={DollarSign}
+          label="Biaya Lainnya"
+        />
+        <SidebarButton
+          active={activeView === 'history'}
+          onClick={() => setActiveView('history')}
+          icon={History}
+          label="Informasi Faktur"
+        />
+      </div>
 
-      {/* Line Items */}
-      <Card
-        title="Line Items"
-        headerAction={
-          <Button type="button" variant="outline" size="sm" onClick={addLine} className="gap-2 btn-press">
-            <Plus className="h-4 w-4" />
-            Add Line
-          </Button>
-        }
-        className="p-3"
-      >
-        <div className="overflow-x-auto -mx-3">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50 border-y border-gray-200 sticky top-0">
-              <tr>
-                <th className="px-2 py-2 text-left font-semibold text-gray-600 w-8">#</th>
-                <th className="px-2 py-2 text-left font-semibold text-gray-600 min-w-[180px]">
-                  Item / Description
-                </th>
-                <th className="px-2 py-2 text-right font-semibold text-gray-600 w-16">Qty</th>
-                <th className="px-2 py-2 text-right font-semibold text-gray-600 w-20">Unit Price</th>
-                <th className="px-2 py-2 text-right font-semibold text-gray-600 w-12">Disc %</th>
-                <th className="px-2 py-2 text-right font-semibold text-gray-600 w-12">Tax %</th>
-                <th className="px-2 py-2 text-right font-semibold text-gray-600 w-20">Amount</th>
-                <th className="px-2 py-2 w-8"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {lines.map((line, index) => (
-                <tr key={line.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-2 py-1.5 text-gray-600 font-medium">{index + 1}</td>
-                  <td className="px-2 py-1.5">
-                    <select
-                      value={line.itemCode}
-                      onChange={(e) => handleItemSelect(index, e.target.value)}
-                      className="w-full px-1.5 py-1 mb-0.5 border border-gray-300 rounded input-glow text-xs"
-                    >
-                      <option value="">Select Item</option>
-                      {dummyItems.map((item) => (
-                        <option key={item.code} value={item.code}>
-                          [{item.code}] {item.name}
-                        </option>
-                      ))}
-                    </select>
+      {/* 2. Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        {/* Top Info Bar (Fixed) - Only visible in Rincian Barang */}
+        {activeView === 'items' && (
+          <div className="bg-white border-b border-warmgray-200 px-6 py-4 flex-shrink-0 relative z-30">
+            <div className="flex items-center gap-2 mb-4">
+              <FileText className="h-5 w-5 text-[#d95d39]" />
+              <h2 className="text-[#d95d39] font-bold text-lg">Informasi Faktur</h2>
+            </div>
+
+            <div className="flex flex-wrap gap-6 items-start">
+              {/* Left Group */}
+              {/* Customer */}
+              <div className="w-full max-w-[400px]">
+                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Pelanggan <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <CustomerSelect
+                    value={formData.vendorCode}
+                    onChange={handleCustomerSelect}
+                    customers={customers.map(c => ({
+                      code: c.code || c.id,
+                      name: c.name,
+                      phone: c.phone || c.mobile,
+                      address: c.billingCity ? `${c.billingAddress}, ${c.billingCity}` : c.billingAddress
+                    }))}
+                  />
+                </div>
+              </div>
+
+              {/* Date */}
+              {/* Date */}
+              <div className="w-full max-w-[200px]">
+                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Tanggal Faktur</label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    name="fakturDate"
+                    value={formData.fakturDate}
+                    onChange={handleDateChange}
+                    className="w-full pl-9 pr-3 h-[38px] border border-warmgray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-warmgray-900 font-medium transition-shadow cursor-pointer"
+                  />
+                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-warmgray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Currency */}
+              <div className="w-full max-w-[250px]">
+                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Mata Uang</label>
+                <div className="relative">
+                  <select
+                    name="currency"
+                    value={formData.currency}
+                    onChange={handleVendorChange}
+                    className="w-full px-3 h-[38px] border border-warmgray-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 appearance-none text-warmgray-900 font-medium transition-shadow"
+                  >
+                    <option value="IDR">IDR - Rupiah Indonesia</option>
+                    <option value="USD">USD - US Dollar</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Due Date - REMOVED */}
+
+              {/* Invoice Number (Right) */}
+              <div className="w-full max-w-[350px] ml-auto lg:ml-0">
+                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">No. Faktur</label>
+
+                <div className="flex gap-2 items-center">
+                  {/* Toggle Switch (Left Side) */}
+                  <div
+                    className="flex items-center justify-center h-[38px] px-2 cursor-pointer group rounded border border-transparent hover:bg-warmgray-50 transition-colors"
+                    onClick={handleManualFakturToggle}
+                    title={isManualFaktur ? "Mode Manual Aktif" : "Mode Auto-Generated"}
+                  >
+                    <div className={cn(
+                      "w-9 h-5 rounded-full relative transition-colors duration-200 ease-in-out flex-shrink-0",
+                      isManualFaktur ? "bg-primary-500" : "bg-warmgray-300 group-hover:bg-warmgray-400"
+                    )}>
+                      <div className={cn(
+                        "absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-sm",
+                        isManualFaktur ? "translate-x-4.5" : "translate-x-0.5"
+                      )} style={{ transform: isManualFaktur ? 'translateX(18px)' : 'translateX(2px)' }} />
+                    </div>
+                  </div>
+
+                  <div className="relative flex-1">
                     <input
                       type="text"
-                      value={line.description}
-                      onChange={(e) => handleLineChange(index, 'description', e.target.value)}
-                      placeholder="Description"
-                      className="w-full px-1.5 py-1 border border-gray-300 rounded input-glow text-xs"
+                      value={formData.fakturNumber}
+                      readOnly={!isManualFaktur}
+                      onChange={(e) => handleFormChange('fakturNumber', e.target.value)}
+                      placeholder={isManualFaktur ? "Masukkan No. Faktur" : "Auto-Generated"}
+                      className={cn(
+                        "w-full pl-9 pr-3 h-[38px] border rounded text-sm font-medium transition-all focus:outline-none",
+                        isManualFaktur
+                          ? "bg-white border-warmgray-300 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-warmgray-900"
+                          : "bg-warmgray-100 border-warmgray-200 text-warmgray-500 cursor-not-allowed select-none"
+                      )}
                     />
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <input
-                      type="number"
-                      value={line.quantity}
-                      onChange={(e) =>
-                        handleLineChange(index, 'quantity', parseFloat(e.target.value) || 0)
-                      }
-                      min="0"
-                      step="0.01"
-                      className="w-full px-1.5 py-1 border border-gray-300 rounded input-glow text-right text-xs"
-                    />
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <input
-                      type="number"
-                      value={line.unitPrice}
-                      onChange={(e) =>
-                        handleLineChange(index, 'unitPrice', parseFloat(e.target.value) || 0)
-                      }
-                      min="0"
-                      step="0.01"
-                      className="w-full px-1.5 py-1 border border-gray-300 rounded input-glow text-right text-xs"
-                    />
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <input
-                      type="number"
-                      value={line.discountPercent}
-                      onChange={(e) =>
-                        handleLineChange(index, 'discountPercent', parseFloat(e.target.value) || 0)
-                      }
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      className="w-full px-1.5 py-1 border border-gray-300 rounded input-glow text-right text-xs"
-                    />
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <input
-                      type="number"
-                      value={line.taxPercent}
-                      onChange={(e) =>
-                        handleLineChange(index, 'taxPercent', parseFloat(e.target.value) || 0)
-                      }
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      className="w-full px-1.5 py-1 border border-gray-300 rounded input-glow text-right text-xs"
-                    />
-                  </td>
-                  <td className="px-2 py-1.5 text-right font-semibold text-gray-900 text-xs">
-                    {formatCurrency(line.totalAmount)}
-                  </td>
-                  <td className="px-2 py-1.5 text-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeLine(index)}
-                      disabled={lines.length === 1}
-                      className="btn-press text-danger-600 hover:bg-danger-50 h-6 w-6 p-0"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                    <Hash className="absolute left-2.5 top-2.5 h-4 w-4 text-warmgray-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
 
-      {/* Totals */}
-      <Card title="Invoice Summary" className="p-4">
-        <div className="max-w-sm ml-auto space-y-2">
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-600">Subtotal:</span>
-            <span className="font-medium text-gray-900">{formatCurrency(totals.subtotal)}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-600">Discount:</span>
-            <span className="font-medium text-red-600">({formatCurrency(totals.totalDiscount)})</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-600">Tax (PPN):</span>
-            <span className="font-medium text-gray-900">{formatCurrency(totals.totalTax)}</span>
-          </div>
-          <div className="flex justify-between text-sm font-bold border-t border-gray-200 pt-2 mt-2">
-            <span>Grand Total:</span>
-            <span className="text-primary-600 text-base">{formatCurrency(totals.grandTotal)}</span>
-          </div>
-        </div>
-      </Card>
-
-      {/* Memo */}
-      <Card title="Memo / Notes" className="p-4">
-        <textarea
-          name="memo"
-          value={formData.memo}
-          onChange={handleFormChange}
-          rows={2}
-          placeholder="Add any additional notes here..."
-          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded input-glow transition-all duration-200 resize-none"
-        />
-      </Card>
-
-      {/* Fixed Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Calculator className="h-5 w-5 text-gray-500" />
-            <div>
-              <p className="text-sm text-gray-600">Grand Total</p>
-              <p className="text-xl font-bold text-primary-600">{formatCurrency(totals.grandTotal)}</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <Button type="button" variant="secondary" className="btn-press">
-              Draft
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isLoading} className="btn-press">
-              {isLoading ? 'Saving...' : 'Save & Post'}
+        )}
+
+        {/* View Content Area */}
+        <div className="flex-1 overflow-hidden p-6 relative bg-[#f0f2f5]">
+          {activeView === 'items' && (
+            <InvoiceItemsView
+              items={lines}
+              onItemsChange={setLines}
+              // Determine status: 
+              // 1. If no ID (or specific flag), it's "New Data" (unsaved) -> No Stamp
+              // 2. If Saved & Paid -> 'paid'
+              // 3. If Saved & Unpaid -> 'unpaid'
+              // For now, let's assume if it has an ID, it is saved. And default to 'unpaid' for demo unless specified.
+              status={initialData.id ? 'unpaid' : 'unsaved'}
+            />
+          )}
+
+          {activeView === 'info' && (
+            <InvoiceInfoView
+              formData={formData}
+              onChange={handleFormChange}
+            />
+          )}
+
+          {activeView === 'costs' && (
+            <InvoiceCostsView />
+          )}
+
+          {activeView === 'history' && (
+            <InvoiceHistoryView
+              formData={formData}
+              totals={totals}
+            />
+          )}
+        </div>
+
+        {/* Bottom Action Bar (Sticky) */}
+        <div className="bg-white border-t border-warmgray-300 px-6 py-3 flex items-center justify-between shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-20">
+          {/* Grand Total Display */}
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-warmgray-600">Sub Total</span>
+              <div className="flex flex-col items-end">
+                <span className="text-sm font-bold text-warmgray-900">{formatCurrency(totals.subtotal)}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <span className="text-sm font-semibold text-warmgray-600">Diskon</span>
+                <span className="bg-blue-50 text-blue-600 text-[10px] px-1 rounded border border-blue-100">%</span>
+              </div>
+              <div className="flex items-center border border-warmgray-300 rounded bg-white w-32 overflow-hidden">
+                <span className="bg-warmgray-50 px-2 py-1 text-xs text-warmgray-500 border-r border-warmgray-300">Rp</span>
+                <input
+                  type="number"
+                  value={0}
+                  className="w-full py-1 px-2 text-right text-sm border-none focus:ring-0 outline-none"
+                  readOnly
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-warmgray-700">Total</span>
+              <span className="text-lg font-bold text-warmgray-900">{formatCurrency(totals.grandTotal)}</span>
+            </div>
+          </div>
+
+          {/* Buttons */}
+          <div className="flex items-center gap-3">
+            <div className="h-6 w-px bg-warmgray-300 mx-2"></div>
+            <button
+              onClick={() => router.back()}
+              className="text-warmgray-600 hover:text-warmgray-900 font-medium text-sm transition-colors"
+              type="button"
+            >
+              batalkan
+            </button>
+
+            {initialData.id ? (
+              <Button
+                variant="outline"
+                className="bg-white hover:bg-red-50 text-red-600 border-red-200 hover:border-red-300 font-semibold"
+                onClick={handleDelete}
+                isLoading={isLoading}
+                type="button"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Hapus
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                className="bg-warmgray-200 hover:bg-warmgray-300 text-warmgray-800 border-none font-semibold"
+                onClick={(e) => handleSaveDraft(e)}
+                isLoading={isLoading}
+                type="button"
+              >
+                Simpan Draf
+              </Button>
+            )}
+
+            <Button
+              variant="primary"
+              className="bg-[#d95d39] hover:bg-[#c44e2b] text-white border-none font-semibold shadow-md"
+              onClick={(e) => handleSubmit(e, 'UNPAID')}
+              isLoading={isLoading}
+              type="button"
+            >
+              Simpan Transaksi
             </Button>
           </div>
         </div>
       </div>
-    </form>
+    </div>
   );
 }
+
+// Side Button Component
+function SidebarButton({ active, onClick, icon: Icon, label }: { active: boolean, onClick: () => void, icon: any, label: string }) {
+  return (
+    <div className="group relative flex items-center justify-center w-full">
+      <button
+        onClick={onClick}
+        className={cn(
+          "w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200",
+          active
+            ? "bg-blue-100 text-blue-600 shadow-sm ring-1 ring-blue-200"
+            : "text-warmgray-400 hover:bg-warmgray-50 hover:text-warmgray-600"
+        )}
+      >
+        <Icon className="h-5 w-5" />
+      </button>
+
+      {/* Tooltip */}
+      <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+        {label}
+      </div>
+    </div>
+  )
+}
+

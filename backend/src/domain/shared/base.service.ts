@@ -13,4 +13,8 @@ export abstract class BaseService<T> {
     async getAll(params?: any): Promise<T[]> {
         return this.repository.findAll(params);
     }
+
+    async delete(id: string): Promise<T> {
+        return this.repository.delete(id);
+    }
 }

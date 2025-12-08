@@ -22,11 +22,17 @@ model Company {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  users     User[]
-  contacts  Contact[]
-  items     Item[]
+
+  users       User[]
+  customers   Customer[]
+  items       Item[]
   salesOrders SalesOrder[]
+  fakturs     Faktur[]
+  warehouses  Warehouse[]
+  itemCategories ItemCategory[]
+  units          Unit[]
+  accounts       Account[]
+  journalEntries JournalEntry[]
 }
 
 model User {
@@ -51,35 +57,87 @@ enum UserRole {
 
 // --- MASTER DATA ---
 
-model Contact {
+model Customer {
   id          String      @id @default(uuid())
   companyId   String
   code        String
   name        String
-  type        ContactType // CUSTOMER, VENDOR, BOTH
+  category    String?     // Kategori (Retail, Agent, etc)
+  
+  // Identity
+  contactPerson String?   // Kontak
   email       String?
-  phone       String?
-  mobile      String?
-  address     String?
-  city        String?
-  state       String?
-  zipCode     String?
-  country     String?
-  notes       String?
+  phone       String?     // No. Telp Bisnis
+  mobile      String?     // Handphone
+  fax         String?     // Faximili
+  website     String?
+  currency    String      @default("IDR") // Mata Uang Utama
+  notes       String?     // Catatan
+
+  // Billing Address (Alamat Penagihan)
+  billingAddress  String?
+  billingCity     String?
+  billingProvince String?
+  billingCountry  String?
+  billingZipCode  String?
+
+  // Shipping Address (Alamat Pengiriman)
+  shippingAddress  String?
+  shippingCity     String?
+  shippingProvince String?
+  shippingCountry  String?
+  shippingZipCode  String?
+  
+  // Sales Rules
+  priceCategory     String?   // Kategori Harga
+  discountCategory  String?   // Kategori Diskon
+  paymentTerms      Int       @default(0) // Syarat Pembayaran (Days)
+  creditLimit       Decimal   @default(0) @db.Decimal(15, 2) // Limit Piutang
+  maxReceivableDays Int       @default(0) // Nilai Umur Piutang (hari)
+  salesperson       String?   // Default Penjual
+  defaultDiscount   Decimal   @default(0) @db.Decimal(5, 2) // Default Diskon (%)
+  
+  // Tax Information
+  taxIncluded       Boolean   @default(false) // Default Total Faktur sudah termasuk Pajak
+  npwp              String?
+  taxName           String?   // Nama Wajib Pajak
+  nik               String?
+  nppkp             String?
+  taxAddress        String?   // Alamat (Pajak)
+  transactionDetail String?   // Detail Transaksi
+  documentType      String?   // Jenis Dokumen
+
+  // Accounting Mapping (Default Accounts)
+  receivableAccountId      String? // Akun Piutang
+  downPaymentAccountId     String? // Akun Uang Muka
+  salesAccountId           String? // Akun Penjualan
+  cogsAccountId            String? // Akun Beban Pokok Penjualan
+  salesReturnAccountId     String? // Akun Retur Penjualan
+  goodsDiscountAccountId   String? // Akun Diskon Barang
+  salesDiscountAccountId   String? // Akun Diskon Penjualan
+
+  // System
   isActive    Boolean     @default(true)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   
-  company     Company     @relation(fields: [companyId], references: [id])
-  salesOrders SalesOrder[]
+  // Relations
+  company       Company        @relation(fields: [companyId], references: [id])
+  salesOrders   SalesOrder[]
+  fakturs       Faktur[]
+  itemSuppliers ItemSupplier[] // Kept for compatibility, though name implies Supplier
 
+  // Account Relations
+  receivableAccount    Account? @relation("CustReceivable", fields: [receivableAccountId], references: [id])
+  downPaymentAccount   Account? @relation("CustDownPayment", fields: [downPaymentAccountId], references: [id])
+  salesAccount         Account? @relation("CustSales", fields: [salesAccountId], references: [id])
+  cogsAccount          Account? @relation("CustCOGS", fields: [cogsAccountId], references: [id])
+  salesReturnAccount   Account? @relation("CustReturn", fields: [salesReturnAccountId], references: [id])
+  goodsDiscountAccount Account? @relation("CustGoodsDisc", fields: [goodsDiscountAccountId], references: [id])
+  salesDiscountAccount Account? @relation("CustSalesDisc", fields: [salesDiscountAccountId], references: [id])
+
+  @@map("customer") // Explicit table name
   @@unique([companyId, code])
-}
-
-enum ContactType {
-  CUSTOMER
-  VENDOR
-  BOTH
 }
 
 model Item {
@@ -88,26 +146,201 @@ model Item {
   code        String
   name        String
   description String?
-  barcode     String?
+  barcode     String?  @unique
   uom         String   @default("PCS")
+  brand       String?
   categoryId  String?
-  
-  // Pricing
-  purchasePrice Decimal @default(0) @db.Decimal(15, 2)
-  sellPrice     Decimal @default(0) @db.Decimal(15, 2)
-  
-  // Stock
-  isStockItem Boolean   @default(true)
-  minStock    Decimal   @default(0)
-  
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
 
-  company     Company   @relation(fields: [companyId], references: [id])
+  // Stock settings
+  isStockItem        Boolean @default(true)
+  serialNumberActive Boolean @default(false)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  company         Company          @relation(fields: [companyId], references: [id])
+  category        ItemCategory?    @relation(fields: [categoryId], references: [id])
   salesOrderLines SalesOrderLine[]
+  fakturLines     FakturLine[]
+
+  // New normalized relations
+  pricing    ItemPricing[]
+  stocks     ItemStock[]
+  suppliers  ItemSupplier[]
+  taxes      ItemTax[]
+  accounts   ItemAccount[]
 
   @@unique([companyId, code])
+  @@index([categoryId])
+  @@index([barcode])
+}
+
+// --- INVENTORY SUPPORTING TABLES ---
+
+model ItemCategory {
+  id          String   @id @default(uuid())
+  companyId   String
+  code        String
+  name        String
+  description String?
+  parentId    String?  // Self-referencing for hierarchy
+  productType String?  // Product type classification
+  hppAccountId String? // HPP (Cost of Goods Sold) account ID
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company        @relation(fields: [companyId], references: [id])
+  parent      ItemCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    ItemCategory[] @relation("CategoryHierarchy")
+  hppAccount  Account?       @relation("CategoryHPP", fields: [hppAccountId], references: [id])
+  items       Item[]
+
+  @@unique([companyId, code])
+  @@index([parentId])
+}
+
+model Unit {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@unique([companyId, name])
+}
+
+model ItemPricing {
+  id              String    @id @default(uuid())
+  itemId          String
+  priceType       PriceType
+  price           Decimal   @default(0) @db.Decimal(15, 2)
+  defaultDiscount Decimal   @default(0) @db.Decimal(5, 2)
+  minimumQuantity Decimal   @default(0) @db.Decimal(10, 2)
+  currency        String    @default("IDR")
+  isActive        Boolean   @default(true)
+  effectiveFrom   DateTime?
+  effectiveTo     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, priceType])
+  @@index([effectiveFrom, effectiveTo])
+}
+
+enum PriceType {
+  SELL       // Default selling price
+  PURCHASE   // Default purchase price
+  WHOLESALE  // Harga grosir
+  RETAIL     // Harga retail
+  SPECIAL    // Harga khusus
+}
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  companyId String
+  code      String
+  name      String
+  address   String?
+  city      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company     @relation(fields: [companyId], references: [id])
+  stocks  ItemStock[]
+
+  @@unique([companyId, code])
+}
+
+model ItemStock {
+  id             String    @id @default(uuid())
+  itemId         String
+  warehouseId    String
+  minStock       Decimal   @default(0) @db.Decimal(10, 2)
+  maxStock       Decimal   @default(0) @db.Decimal(10, 2)
+  currentStock   Decimal   @default(0) @db.Decimal(10, 2)
+  reservedStock  Decimal   @default(0) @db.Decimal(10, 2)
+  availableStock Decimal   @default(0) @db.Decimal(10, 2)
+  reorderPoint   Decimal   @default(0) @db.Decimal(10, 2)
+  lastStockCount DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([itemId, warehouseId])
+  @@index([availableStock])
+}
+
+model ItemSupplier {
+  id                String    @id @default(uuid())
+  itemId            String
+  supplierId        String
+  isPrimary         Boolean   @default(false)
+  purchaseUom       String?
+  purchasePrice     Decimal   @default(0) @db.Decimal(15, 2)
+  leadTimeDays      Int       @default(0)
+  minimumOrder      Decimal   @default(0) @db.Decimal(10, 2)
+  lastPurchaseDate  DateTime?
+  lastPurchasePrice Decimal?  @db.Decimal(15, 2)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  item     Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  supplier Customer @relation(fields: [supplierId], references: [id])
+
+  @@unique([itemId, supplierId])
+  @@index([isPrimary])
+}
+
+model ItemTax {
+  id           String   @id @default(uuid())
+  itemId       String
+  taxCode      String   // PPN, PPh, etc
+  taxName      String
+  taxRate      Decimal  @default(0) @db.Decimal(5, 2)
+  taxAccountId String?  // FK to Account
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  taxAccount Account? @relation(fields: [taxAccountId], references: [id])
+
+  @@index([itemId, taxCode])
+}
+
+model ItemAccount {
+  id          String          @id @default(uuid())
+  itemId      String
+  accountType ItemAccountType
+  accountId   String          // FK to ChartOfAccounts
+  createdAt   DateTime        @default(now())
+
+  item    Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@unique([itemId, accountType])
+}
+
+enum ItemAccountType {
+  INVENTORY        // Persediaan
+  SALES            // Penjualan
+  SALES_RETURN     // Retur Penjualan
+  SALES_DISCOUNT   // Diskon Penjualan
+  GOODS_SHIPPED    // Barang Terkirim
+  COGS             // Beban Pokok Penjualan
+  PURCHASE_RETURN  // Retur Pembelian
+  PURCHASE_ACCRUAL // Pembelian Belum Tertagih
 }
 
 // --- SALES MODULE ---
@@ -120,7 +353,7 @@ model SalesOrder {
   dueDate      DateTime?
   
   customerId   String
-  customer     Contact     @relation(fields: [customerId], references: [id])
+  customer     Customer    @relation(fields: [customerId], references: [id])
   
   status       OrderStatus @default(DRAFT)
   
@@ -142,6 +375,7 @@ model SalesOrder {
 
   company      Company     @relation(fields: [companyId], references: [id])
   lines        SalesOrderLine[]
+  fakturs      Faktur[] // Relation to Fakturs
 
   @@unique([companyId, orderNumber])
 }
@@ -163,12 +397,201 @@ model SalesOrderLine {
   item         Item?       @relation(fields: [itemId], references: [id])
 }
 
+model Faktur {
+  id            String        @id @default(uuid())
+  companyId     String
+  fakturNumber  String
+  salesOrderId  String?       // Optional link to SalesOrder
+  fakturDate    DateTime
+  dueDate       DateTime?
+
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+
+  status        FakturStatus  @default(DRAFT)
+
+  // Financials
+  currency      String        @default("IDR")
+  subtotal      Decimal       @db.Decimal(15, 2)
+  discountPercent Decimal     @default(0) @db.Decimal(5, 2)
+  discountAmount  Decimal     @default(0) @db.Decimal(15, 2)
+  taxPercent      Decimal     @default(0) @db.Decimal(5, 2)
+  taxAmount       Decimal     @default(0) @db.Decimal(15, 2)
+  totalAmount     Decimal     @db.Decimal(15, 2)
+
+  amountPaid    Decimal       @default(0) @db.Decimal(15, 2)
+  balanceDue    Decimal       @db.Decimal(15, 2)
+
+  notes         String?
+
+  // Audit
+  createdBy     String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  company       Company       @relation(fields: [companyId], references: [id])
+  salesOrder    SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+  lines         FakturLine[]
+
+  @@unique([companyId, fakturNumber])
+}
+
+model FakturLine {
+  id            String        @id @default(uuid())
+  fakturId      String
+  itemId        String?
+  description   String
+
+  quantity      Decimal       @db.Decimal(10, 2)
+  unitPrice     Decimal       @db.Decimal(15, 2)
+  discountPercent Decimal     @default(0) @db.Decimal(5, 2)
+  amount        Decimal       @db.Decimal(15, 2)
+
+  faktur        Faktur        @relation(fields: [fakturId], references: [id], onDelete: Cascade)
+  item          Item?         @relation(fields: [itemId], references: [id])
+}
+
 enum OrderStatus {
   DRAFT
-  PENDING_APPROVAL
-  APPROVED
+  CONFIRMED
   PROCESSING
-  SHIPPED
   COMPLETED
   CANCELLED
+}
+
+enum FakturStatus {
+  DRAFT
+  PENDING   // Diajukan
+  REJECTED  // Ditolak
+  UNPAID    // Belum Lunas (Previously ISSUED)
+  PARTIAL
+  PAID      // Lunas
+  OVERDUE
+  CANCELLED
+}
+
+// --- ACCOUNTING MODULE ---
+
+model Account {
+  id          String   @id @default(uuid())
+  companyId   String
+  
+  // Identitas
+  code        String   
+  name        String
+  
+  // Hierarki
+  parentId    String?  
+  parent      Account? @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children    Account[] @relation("AccountHierarchy")
+  
+  // Klasifikasi
+  type        AccountType 
+  classification String? // Sub-klasifikasi detail
+  level       Int      @default(0) // Kedalaman hierarki (0=Header, 1=Sub, dst)
+  isHeader    Boolean  @default(false)
+  
+  // Konfigurasi
+  currency    String   @default("IDR")
+  isActive    Boolean  @default(true)
+  
+  // Relasi ke Data Lain
+  journalLines    JournalLine[]
+  itemAccounts    ItemAccount[]
+  itemTaxes       ItemTax[]
+  hppCategories   ItemCategory[] @relation("CategoryHPP")
+  
+  // Snapshot Saldo
+  balances    AccountBalance[]
+
+  // Inverse Relations for Customer Defaults
+  custReceivable    Customer[] @relation("CustReceivable")
+  custDownPayment   Customer[] @relation("CustDownPayment")
+  custSales         Customer[] @relation("CustSales")
+  custCOGS          Customer[] @relation("CustCOGS")
+  custReturn        Customer[] @relation("CustReturn")
+  custGoodsDisc     Customer[] @relation("CustGoodsDisc")
+  custSalesDisc     Customer[] @relation("CustSalesDisc")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, code])
+  @@index([companyId, type])
+}
+
+model JournalEntry {
+  id            String   @id @default(uuid())
+  companyId     String
+  
+  transactionDate DateTime
+  transactionNo String   // Nomor Bukti (JV-2023-001)
+  reference     String?  // Referensi eksternal (Invoice No, dll)
+  description   String?
+  
+  // Relasi ke modul asal
+  sourceType    String?  // 'SALES', 'PURCHASE', 'INVENTORY'
+  sourceId      String?  
+  
+  lines         JournalLine[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  company       Company  @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, transactionNo])
+  @@index([transactionDate])
+}
+
+model JournalLine {
+  id            String   @id @default(uuid())
+  journalId     String
+  accountId     String
+  
+  description   String?
+  
+  debit         Decimal  @default(0) @db.Decimal(15, 2)
+  credit        Decimal  @default(0) @db.Decimal(15, 2)
+  
+  journal       JournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  account       Account      @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, journalId])
+}
+
+model AccountBalance {
+  id          String   @id @default(uuid())
+  accountId   String
+  period      DateTime // Awal bulan (2024-01-01)
+  
+  openingBalance Decimal @default(0) @db.Decimal(15, 2)
+  totalDebit     Decimal @default(0) @db.Decimal(15, 2)
+  totalCredit    Decimal @default(0) @db.Decimal(15, 2)
+  closingBalance Decimal @default(0) @db.Decimal(15, 2)
+  
+  account     Account @relation(fields: [accountId], references: [id])
+
+  @@unique([accountId, period])
+}
+
+enum AccountType {
+  CASH_AND_BANK             // Kas & Bank
+  ACCOUNTS_RECEIVABLE       // Piutang Usaha
+  INVENTORY                 // Persediaan
+  OTHER_CURRENT_ASSETS      // Aset Lancar Lainnya
+  FIXED_ASSETS              // Aset Tetap
+  ACCUMULATED_DEPRECIATION  // Akumulasi Penyusutan
+  OTHER_ASSETS              // Aset Lainnya
+  ACCOUNTS_PAYABLE          // Utang Usaha
+  OTHER_CURRENT_LIABILITIES // Liabilitas Jangka Pendek
+  LONG_TERM_LIABILITIES     // Liabilitas Jangka Panjang
+  EQUITY                    // Modal
+  REVENUE                   // Pendapatan
+  COGS                      // Beban Pokok Penjualan
+  EXPENSE                   // Beban
+  OTHER_EXPENSE             // Beban Lainnya
+  OTHER_INCOME              // Pendapatan Lainnya
 }

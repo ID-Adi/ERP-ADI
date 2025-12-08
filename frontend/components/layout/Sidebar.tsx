@@ -3,96 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  LayoutDashboard,
-  Users,
-  Package,
-  FileText,
-  ShoppingCart,
-  Wallet,
-  BarChart3,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  Zap,
-} from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTabContext } from '@/contexts/TabContext';
-
-interface MenuItem {
-  title: string;
-  href?: string;
-  icon: React.ElementType;
-  children?: MenuItem[];
-  // Helper to check if any child is active
-  isChildActive?: (pathname: string) => boolean;
-}
-
-const isMenuItemActive = (item: MenuItem, pathname: string): boolean => {
-  if (item.href && item.href === pathname) return true;
-  if (item.children) {
-    return item.children.some(child => isMenuItemActive(child, pathname));
-  }
-  return false;
-};
-
-const menuItems: MenuItem[] = [
-  {
-    title: 'Dashboard',
-    href: '/dashboard',
-    icon: LayoutDashboard,
-  },
-  {
-    title: 'Master Data',
-    icon: Zap,
-    children: [
-      { title: 'Contacts', href: '/dashboard/masters/contacts', icon: Users },
-      { title: 'Items', href: '/dashboard/masters/items', icon: Package },
-      { title: 'GL Accounts', href: '/dashboard/masters/accounts', icon: Wallet },
-    ],
-  },
-  {
-    title: 'Sales',
-    icon: ShoppingCart,
-    children: [
-      { title: 'Quotations', href: '/dashboard/sales/quotations', icon: FileText },
-      { title: 'Sales Orders', href: '/dashboard/sales/orders', icon: FileText },
-      { title: 'Deliveries', href: '/dashboard/sales/deliveries', icon: Package },
-      { title: 'Down Payments', href: '/dashboard/sales/down-payments', icon: Wallet },
-      { title: 'Invoices', href: '/dashboard/sales/invoices', icon: FileText },
-      { title: 'Receipts', href: '/dashboard/sales/receipts', icon: Wallet },
-      { title: 'Returns', href: '/dashboard/sales/returns', icon: Package },
-      { title: 'Customers', href: '/dashboard/sales/customers', icon: Users },
-    ],
-  },
-  {
-    title: 'Purchase',
-    icon: ShoppingCart,
-    children: [
-      { title: 'PO', href: '/dashboard/purchases/orders', icon: FileText },
-      { title: 'Bills', href: '/dashboard/purchases/bills', icon: FileText },
-    ],
-  },
-  {
-    title: 'Inventory',
-    href: '/dashboard/inventory',
-    icon: Package,
-  },
-  {
-    title: 'Reports',
-    icon: BarChart3,
-    children: [
-      { title: 'Trial Balance', href: '/dashboard/reports/trial-balance', icon: BarChart3 },
-      { title: 'Balance Sheet', href: '/dashboard/reports/balance-sheet', icon: BarChart3 },
-      { title: 'Income Stmt', href: '/dashboard/reports/income-statement', icon: BarChart3 },
-    ],
-  },
-  {
-    title: 'Settings',
-    href: '/dashboard/settings',
-    icon: Settings,
-  },
-];
+import { menuItems, MenuItem, isMenuItemActive } from '@/config/menu';
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -101,7 +15,7 @@ interface SidebarProps {
 export default function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [expandedItems, setExpandedItems] = useState<string[]>(['Master Data', 'Sales']);
+  const [expandedItems, setExpandedItems] = useState<string[]>(['Penjualan']);
   const [openPopup, setOpenPopup] = useState<string | null>(null);
   const { openFeatureTab, openDataTab } = useTabContext();
 
@@ -119,7 +33,7 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
     // Also open a "List" data tab for the feature
     openDataTab(item.href, {
       id: `${item.href}-list`,
-      title: 'List',
+      title: 'Daftar',
       href: item.href,
     });
 
@@ -209,11 +123,17 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
               <div className="fixed inset-0 z-40" onClick={() => setOpenPopup(null)} />
 
               {/* Menu Content */}
-              <div className="absolute left-full top-0 ml-3 w-48 bg-white rounded-xl shadow-xl border border-surface-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-left">
+              <div className={cn(
+                "absolute left-full top-0 ml-3 bg-white rounded-xl shadow-xl border border-surface-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-left",
+                item.children && item.children.length > 8 ? "w-96" : "w-48"
+              )}>
                 <div className="px-4 py-3 border-b border-surface-100 bg-surface-50">
                   <span className="text-sm font-semibold text-warmgray-900">{item.title}</span>
                 </div>
-                <div className="p-1.5">
+                <div className={cn(
+                  "p-1.5",
+                  item.children && item.children.length > 8 && "grid grid-cols-2 gap-1"
+                )}>
                   {item.children?.map((child) => (
                     <button
                       key={child.title}
@@ -229,7 +149,7 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
                       )}
                     >
                       <child.icon className="h-4 w-4 opacity-70" />
-                      {child.title}
+                      <span className="truncate">{child.title}</span>
                     </button>
                   ))}
                 </div>
@@ -329,7 +249,7 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
             <span className="text-white font-medium text-sm">A</span>
             {/* Tooltip */}
             <div className="absolute left-full ml-2 px-2 py-1 bg-warmgray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
-              Admin User
+              Administrator
             </div>
           </div>
         </div>
@@ -340,7 +260,7 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
               <span className="text-white font-medium text-sm">A</span>
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-warmgray-900 truncate">Admin User</p>
+              <p className="text-sm font-medium text-warmgray-900 truncate">Administrator</p>
               <p className="text-xs text-warmgray-500 truncate">admin@erp.com</p>
             </div>
           </div>

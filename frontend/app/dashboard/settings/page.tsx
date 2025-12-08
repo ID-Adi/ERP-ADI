@@ -9,7 +9,6 @@ import {
     FileCheck,
     Store,
     Wallet,
-    Cpu,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -60,39 +59,39 @@ const settingItems = [
         title: 'Capital',
         description: 'Financial services and loans',
         icon: Wallet,
-        href: '/dashboard/settings/capital', // Using Wallet as closest match for "Capital"
+        href: '/dashboard/settings/capital',
     },
 ];
 
 export default function SettingsPage() {
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 px-6 lg:px-8 py-6">
             {/* Header */}
             <div>
                 <h1 className="text-2xl font-bold text-warmgray-900">Settings</h1>
                 <p className="text-sm text-warmgray-500 mt-1">
                     Manage your application settings and preferences
                 </p>
-                <div className="h-1 w-full bg-gradient-to-r from-primary-500 to-transparent mt-4 rounded-full opacity-20" />
+                <div className="h-0.5 w-full bg-primary-100 mt-4 rounded-full" />
             </div>
 
             {/* Settings Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {settingItems.map((item) => {
                     const Icon = item.icon;
                     return (
                         <Link
                             key={item.title}
                             href={item.href}
-                            className="group flex flex-col items-center justify-center p-6 bg-primary-50/50 border-2 border-primary-100 rounded-2xl hover:bg-white hover:border-primary-400 hover:shadow-soft-lg transition-all duration-300 cursor-pointer"
+                            className="group flex flex-col items-center justify-center p-8 bg-white border border-warmgray-200 rounded-xl hover:border-primary-500 hover:shadow-lg transition-all duration-200 cursor-pointer"
                         >
-                            <div className="p-4 bg-white rounded-full shadow-sm group-hover:scale-110 group-hover:shadow-md transition-all duration-300 mb-4 border border-primary-100">
+                            <div className="p-4 bg-primary-50 rounded-full mb-4 group-hover:scale-110 transition-transform duration-200">
                                 <Icon className="h-8 w-8 text-primary-600" />
                             </div>
-                            <h3 className="text-lg font-semibold text-warmgray-900 group-hover:text-primary-700 transition-colors">
+                            <h3 className="text-lg font-bold text-warmgray-900 mb-2">
                                 {item.title}
                             </h3>
-                            <p className="text-sm text-warmgray-500 text-center mt-2 transition-opacity duration-300">
+                            <p className="text-sm text-warmgray-500 text-center">
                                 {item.description}
                             </p>
                         </Link>

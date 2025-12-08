@@ -12,36 +12,46 @@ export interface InvoiceTab {
 
 interface TabbedInvoiceEditorProps {
   children: (tab: InvoiceTab, onDataChange: (data: any) => void, updateTabLabel: (label: string) => void) => ReactNode;
+  initialTabData?: any;
 }
 
-export default function TabbedInvoiceEditor({ children }: TabbedInvoiceEditorProps) {
-  const [tabs, setTabs] = useState<InvoiceTab[]>([
-    {
-      id: '1',
-      label: 'Invoice 1 (Draft)',
-      hasUnsavedChanges: false,
-      data: {
-        vendorCode: '',
-        invoiceDate: new Date().toISOString().split('T')[0],
-        dueDate: '',
-        memo: '',
-        lines: [
-          {
-            id: '1',
-            itemCode: '',
-            description: '',
-            quantity: 1,
-            unitPrice: 0,
-            discountPercent: 0,
-            taxPercent: 11,
-            lineAmount: 0,
-            discountAmount: 0,
-            taxAmount: 0,
-            totalAmount: 0,
-          },
-        ],
-      },
+export default function TabbedInvoiceEditor({ children, initialTabData }: TabbedInvoiceEditorProps) {
+  const createDefaultTab = () => ({
+    id: '1',
+    label: 'Faktur 1 (Draft)',
+    hasUnsavedChanges: false,
+    data: {
+      vendorCode: '',
+      fakturDate: new Date().toISOString().split('T')[0],
+      dueDate: '',
+      memo: '',
+      lines: [
+        {
+          id: '1',
+          itemCode: '',
+          description: '',
+          quantity: 1,
+          unitPrice: 0,
+          discountPercent: 0,
+          taxPercent: 11,
+          lineAmount: 0,
+          discountAmount: 0,
+          taxAmount: 0,
+          totalAmount: 0,
+        },
+      ],
     },
+  });
+
+  const createTabFromData = (data: any) => ({
+    id: '1',
+    label: data.fakturNumber || 'Edit Invoice',
+    hasUnsavedChanges: false,
+    data: data,
+  });
+
+  const [tabs, setTabs] = useState<InvoiceTab[]>([
+    initialTabData ? createTabFromData(initialTabData) : createDefaultTab(),
   ]);
 
   const [activeTabId, setActiveTabId] = useState('1');
@@ -88,11 +98,11 @@ export default function TabbedInvoiceEditor({ children }: TabbedInvoiceEditorPro
     const newId = Math.random().toString(36).substring(7);
     const newTab: InvoiceTab = {
       id: newId,
-      label: `Invoice ${tabs.length + 1} (Draft)`,
+      label: `Faktur ${tabs.length + 1} (Draft)`,
       hasUnsavedChanges: false,
       data: {
         vendorCode: '',
-        invoiceDate: new Date().toISOString().split('T')[0],
+        fakturDate: new Date().toISOString().split('T')[0],
         dueDate: '',
         memo: '',
         lines: [

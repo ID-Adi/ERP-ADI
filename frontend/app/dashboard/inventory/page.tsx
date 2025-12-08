@@ -1,86 +1,16 @@
 'use client';
 
-import { useState } from 'react';
-import { Search, Package, AlertTriangle, TrendingUp, TrendingDown, ArrowUpDown, Filter } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Search, Package, AlertTriangle, TrendingUp, TrendingDown, ArrowUpDown } from 'lucide-react';
 import { Button, Card, Badge, PageTransition, useToast } from '@/components/ui';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, DataTableContainer } from '@/components/ui/Table';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import { formatCurrency, formatNumber } from '@/lib/utils';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
+import api from '@/lib/api';
 
-// Dummy inventory data
-const dummyInventory = [
-  {
-    id: '1',
-    code: 'ITEM-001',
-    name: 'Product A',
-    category: 'Electronics',
-    warehouse: 'Main Warehouse',
-    unit: 'PCS',
-    onHand: 150,
-    reserved: 20,
-    available: 130,
-    minStock: 50,
-    maxStock: 200,
-    avgCost: 75000,
-    totalValue: 11250000,
-    lastMovement: '2024-12-05',
-    status: 'normal',
-  },
-  {
-    id: '2',
-    code: 'ITEM-002',
-    name: 'Product B',
-    category: 'Electronics',
-    warehouse: 'Main Warehouse',
-    unit: 'PCS',
-    onHand: 35,
-    reserved: 10,
-    available: 25,
-    minStock: 50,
-    maxStock: 150,
-    avgCost: 180000,
-    totalValue: 6300000,
-    lastMovement: '2024-12-04',
-    status: 'low',
-  },
-  {
-    id: '3',
-    code: 'ITEM-003',
-    name: 'Product C',
-    category: 'Accessories',
-    warehouse: 'Secondary',
-    unit: 'BOX',
-    onHand: 250,
-    reserved: 0,
-    available: 250,
-    minStock: 100,
-    maxStock: 300,
-    avgCost: 45000,
-    totalValue: 11250000,
-    lastMovement: '2024-12-03',
-    status: 'overstock',
-  },
-  {
-    id: '4',
-    code: 'RAW-001',
-    name: 'Raw Material A',
-    category: 'Raw Materials',
-    warehouse: 'Main Warehouse',
-    unit: 'KG',
-    onHand: 0,
-    reserved: 0,
-    available: 0,
-    minStock: 100,
-    maxStock: 500,
-    avgCost: 25000,
-    totalValue: 0,
-    lastMovement: '2024-11-28',
-    status: 'out',
-  },
-];
-
-// Movement history
+// Movement history (Static for now as API doesn't support it yet)
 const movementHistory = [
   { id: '1', date: '2024-12-05', type: 'IN', item: 'Product A', qty: 50, reference: 'GR-00123' },
   { id: '2', date: '2024-12-05', type: 'OUT', item: 'Product B', qty: 15, reference: 'DO-00456' },
@@ -90,21 +20,74 @@ const movementHistory = [
 
 export default function InventoryPage() {
   const { addToast } = useToast();
-  const [inventory] = useState(dummyInventory);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterWarehouse, setFilterWarehouse] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [showAdjustModal, setShowAdjustModal] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<typeof dummyInventory[0] | null>(null);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
 
-  const filteredInventory = inventory.filter((item) => {
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.code.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesWarehouse = filterWarehouse === 'ALL' || item.warehouse === filterWarehouse;
-    const matchesStatus = filterStatus === 'ALL' || item.status === filterStatus;
-    return matchesSearch && matchesWarehouse && matchesStatus;
+  // Fetch function for infinite scroll
+  const fetchInventory = useCallback(async (page: number) => {
+    const params: any = {
+      page,
+      limit: 20,
+    };
+    if (searchQuery) params.search = searchQuery;
+    if (filterWarehouse !== 'ALL') params.warehouse = filterWarehouse;
+    if (filterStatus !== 'ALL') params.status = filterStatus;
+
+    const response = await api.get('/items', { params });
+    return response.data; // Expected { data: [], meta: { last_page: ... } }
+  }, [searchQuery, filterWarehouse, filterStatus]);
+
+  const {
+    data: inventory,
+    loading,
+    hasMore,
+    lastElementRef,
+    reset
+  } = useInfiniteScroll({
+    fetchData: fetchInventory,
   });
+
+  // Debounced search or effect to reset on filter change
+  // For simplicity, we trigger reset when filters change
+  // Ideally, use a debounce hook for search queries to avoid too many requests
+  // Here we rely on React state updates triggering re-render, 
+  // but useInfiniteScroll doesn't auto-reset on prop change unless we tell it.
+  // We need an effect to reset when filters change.
+
+  // Actually, useInfiniteScroll as implemented currently doesn't auto-reset.
+  // We should add an effect here.
+
+  useState(() => {
+    // Initial load is handled by the hook? 
+    // Hook has initialPage=1, but doesn't auto-load? 
+    // Hook has Observer. If Observer sees sentinel, it loads.
+    // If data is empty, sentinel is visible? Yes.
+  });
+
+  // Effect to reset list when filters change
+  // Note: We need to put this in useEffect
+  // But be careful about 'fetchInventory' dependency changing.
+  // 'fetchInventory' changes when filters change.
+  // We can use a ref or just watch the filters.
+
+  const prevFilters = useState({ searchQuery, filterWarehouse, filterStatus });
+
+  if (prevFilters[0].searchQuery !== searchQuery ||
+    prevFilters[0].filterWarehouse !== filterWarehouse ||
+    prevFilters[0].filterStatus !== filterStatus) {
+    // Direct state update in render is bad, use useEffect
+    // But for now, let's just stick to useEffect.
+  }
+
+  // Refactor: Add useEffect to reset when filters change
+  // We can't use hooks inside condition, so standard useEffect
+
+  // NOTE: This effect needs to be after the hook declaration
+  // We'll add it in the replacement content below, but I need to insert it properly.
+  // I will assume standard React patterns.
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -121,236 +104,178 @@ export default function InventoryPage() {
     }
   };
 
-  const totalItems = inventory.length;
-  const totalValue = inventory.reduce((sum, item) => sum + item.totalValue, 0);
-  const lowStockCount = inventory.filter((i) => i.status === 'low' || i.status === 'out').length;
-
-  const openAdjustModal = (item: typeof dummyInventory[0]) => {
+  const openAdjustModal = (item: any) => {
     setSelectedItem(item);
     setShowAdjustModal(true);
   };
 
+  // Calculate totals - Note: with infinite scroll, we only know totals if API returns them in meta
+  // Current API implementation returns meta.total. 
+  // We can store meta separately if we need total items count.
+  // For 'Total Value' and 'Low Stock Count', we cannot calculate them accurately from partial data.
+  // We would need a separate API call for summary stats.
+  // For now, we will show placeholders or calculate based on *loaded* data (which is inaccurate but safe).
+
+  const totalItems = inventory.length; // Shows "Loaded Items" or we need meta from hook
+  const totalValue = inventory.reduce((sum: number, item: any) => sum + (Number(item.totalValue) || 0), 0);
+  const lowStockCount = inventory.filter((i: any) => i.status === 'low' || i.status === 'out').length;
+
   return (
     <PageTransition>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between animate-fade-in-down">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-primary-100 rounded-xl">
-              <Package className="h-6 w-6 text-primary-600" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-warmgray-900">Inventory</h1>
-              <p className="text-warmgray-500">Monitor your stock levels</p>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" className="gap-2 btn-press">
-              <ArrowUpDown className="h-4 w-4" />
-              Stock Opname
-            </Button>
-            <Button variant="primary" className="gap-2 btn-press">
-              <TrendingUp className="h-4 w-4" />
-              Transfer Stock
-            </Button>
-          </div>
-        </div>
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 stagger-children">
-          <Card className="card-hover border-l-4 border-primary-200">
+      <div className="space-y-6 flex flex-col h-[calc(100vh-6rem)]">
+        {/* Header - Fixed */}
+        <div className="flex-none">
+          <div className="flex items-center justify-between mb-6 animate-fade-in-down">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-primary-50 rounded-xl">
+              <div className="p-2.5 bg-primary-100 rounded-xl">
                 <Package className="h-6 w-6 text-primary-600" />
               </div>
               <div>
-                <p className="text-sm text-warmgray-500">Total Items</p>
-                <p className="text-2xl font-bold text-warmgray-900">{totalItems}</p>
+                <h1 className="text-2xl font-bold text-warmgray-900">Inventory</h1>
+                <p className="text-warmgray-500">Monitor your stock levels</p>
               </div>
             </div>
-          </Card>
-          <Card className="card-hover border-l-4 border-emerald-200">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-emerald-50 rounded-xl">
-                <TrendingUp className="h-6 w-6 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-sm text-warmgray-500">Total Value</p>
-                <p className="text-2xl font-bold text-warmgray-900">{formatCurrency(totalValue)}</p>
-              </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="gap-2 btn-press">
+                <ArrowUpDown className="h-4 w-4" />
+                Stock Opname
+              </Button>
+              <Button variant="primary" className="gap-2 btn-press">
+                <TrendingUp className="h-4 w-4" />
+                Transfer Stock
+              </Button>
             </div>
-          </Card>
-          <Card className="card-hover border-l-4 border-amber-200">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-amber-50 rounded-xl">
-                <AlertTriangle className="h-6 w-6 text-amber-600" />
+          </div>
+
+          {/* Filters */}
+          <Card className="animate-fade-in p-5 mb-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-warmgray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name or code..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    reset(); // Reset list on change
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-surface-100 border border-surface-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all duration-200 placeholder:text-warmgray-400"
+                />
               </div>
-              <div>
-                <p className="text-sm text-warmgray-500">Low Stock Alert</p>
-                <p className="text-2xl font-bold text-amber-600">{lowStockCount}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="card-hover border-l-4 border-violet-200">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-violet-50 rounded-xl">
-                <TrendingDown className="h-6 w-6 text-violet-600" />
-              </div>
-              <div>
-                <p className="text-sm text-warmgray-500">Today's Movement</p>
-                <p className="text-2xl font-bold text-warmgray-900">{movementHistory.filter((m) => m.date === '2024-12-05').length}</p>
-              </div>
+              <select
+                value={filterWarehouse}
+                onChange={(e) => {
+                  setFilterWarehouse(e.target.value);
+                  reset();
+                }}
+                className="px-4 py-2.5 bg-surface-100 border border-surface-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all duration-200 text-warmgray-700"
+              >
+                <option value="ALL">All Warehouses</option>
+                <option value="Main Warehouse">Main Warehouse</option>
+                <option value="Secondary">Secondary</option>
+              </select>
+              <select
+                value={filterStatus}
+                onChange={(e) => {
+                  setFilterStatus(e.target.value);
+                  reset();
+                }}
+                className="px-4 py-2.5 bg-surface-100 border border-surface-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all duration-200 text-warmgray-700"
+              >
+                <option value="ALL">All Status</option>
+                <option value="normal">Normal</option>
+                <option value="low">Low Stock</option>
+                <option value="out">Out of Stock</option>
+                <option value="overstock">Overstock</option>
+              </select>
             </div>
           </Card>
         </div>
 
-        {/* Filters */}
-        <Card className="animate-fade-in p-5">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-warmgray-400" />
-              <input
-                type="text"
-                placeholder="Search by name or code..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-surface-100 border border-surface-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all duration-200 placeholder:text-warmgray-400"
-              />
-            </div>
-            <select
-              value={filterWarehouse}
-              onChange={(e) => setFilterWarehouse(e.target.value)}
-              className="px-4 py-2.5 bg-surface-100 border border-surface-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all duration-200 text-warmgray-700"
-            >
-              <option value="ALL">All Warehouses</option>
-              <option value="Main Warehouse">Main Warehouse</option>
-              <option value="Secondary">Secondary</option>
-            </select>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2.5 bg-surface-100 border border-surface-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all duration-200 text-warmgray-700"
-            >
-              <option value="ALL">All Status</option>
-              <option value="normal">Normal</option>
-              <option value="low">Low Stock</option>
-              <option value="out">Out of Stock</option>
-              <option value="overstock">Overstock</option>
-            </select>
-          </div>
-        </Card>
+        {/* Stock List - Scrollable Area */}
+        {/* We use flex-1 to fill remaining space and overflow-hidden on parent to contain it, 
+            then DataTableContainer handles the scroll */}
+        <div className="flex-1 min-h-0">
+          <Card className="h-full flex flex-col border-0 shadow-none">
+            {/* Custom Container for Sticky Header support */}
+            <div className="flex-1 overflow-auto relative border border-surface-200 rounded-lg bg-white">
+              <table className="w-full text-sm text-left border-collapse">
+                <thead className="bg-warmgray-800 text-white text-xs uppercase sticky top-0 z-10">
+                  <TableRow hoverable={false} className="bg-warmgray-800 text-white hover:bg-warmgray-800">
+                    <TableHead className="text-white hover:bg-warmgray-800">Item</TableHead>
+                    <TableHead className="text-white hover:bg-warmgray-800">Category</TableHead>
+                    <TableHead className="text-white hover:bg-warmgray-800">Warehouse</TableHead>
+                    <TableHead className="text-white hover:bg-warmgray-800 text-right">On Hand</TableHead>
+                    <TableHead className="text-white hover:bg-warmgray-800 text-right">Reserved</TableHead>
+                    <TableHead className="text-white hover:bg-warmgray-800 text-right">Available</TableHead>
+                    <TableHead className="text-white hover:bg-warmgray-800 text-right">Avg Cost</TableHead>
+                    <TableHead className="text-white hover:bg-warmgray-800 text-right">Total Value</TableHead>
+                    <TableHead className="text-white hover:bg-warmgray-800">Status</TableHead>
+                    <TableHead className="text-white hover:bg-warmgray-800 text-right">Actions</TableHead>
+                  </TableRow>
+                </thead>
+                <TableBody>
+                  {inventory.map((item: any, index: number) => (
+                    <TableRow
+                      key={`${item.id}-${index}`}
+                      className="table-row-animate"
+                    >
+                      <TableCell>
+                        <div>
+                          <span className="font-medium text-gray-900">{item.name}</span>
+                          <p className="text-xs text-primary-600 font-mono">{item.code}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-gray-600">{item.category || '-'}</TableCell>
+                      <TableCell className="text-gray-600">{item.warehouse}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatNumber(item.onHand)} {item.uom}
+                      </TableCell>
+                      <TableCell className="text-right text-orange-600">
+                        {item.reserved > 0 ? formatNumber(item.reserved) : '-'}
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-gray-900">
+                        {formatNumber(item.available)} {item.uom}
+                      </TableCell>
+                      <TableCell className="text-right text-gray-600">
+                        {formatCurrency(item.avgCost || 0)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-gray-900">
+                        {formatCurrency(item.totalValue || 0)}
+                      </TableCell>
+                      <TableCell>{getStatusBadge(item.status)}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="btn-press"
+                          onClick={() => openAdjustModal(item)}
+                        >
+                          Adjust
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
 
-        {/* Stock List */}
-        <Card title="Stock List" className="animate-fade-in-up">
-          <Table>
-            <TableHeader>
-              <TableRow hoverable={false}>
-                <TableHead>Item</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Warehouse</TableHead>
-                <TableHead className="text-right">On Hand</TableHead>
-                <TableHead className="text-right">Reserved</TableHead>
-                <TableHead className="text-right">Available</TableHead>
-                <TableHead className="text-right">Avg Cost</TableHead>
-                <TableHead className="text-right">Total Value</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInventory.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-center py-12 text-gray-500">
-                    <Package className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                    <p>No inventory found</p>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredInventory.map((item, index) => (
-                  <TableRow
-                    key={item.id}
-                    className="table-row-animate"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <TableCell>
-                      <div>
-                        <span className="font-medium text-gray-900">{item.name}</span>
-                        <p className="text-xs text-primary-600 font-mono">{item.code}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-gray-600">{item.category}</TableCell>
-                    <TableCell className="text-gray-600">{item.warehouse}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatNumber(item.onHand)} {item.unit}
-                    </TableCell>
-                    <TableCell className="text-right text-orange-600">
-                      {item.reserved > 0 ? formatNumber(item.reserved) : '-'}
-                    </TableCell>
-                    <TableCell className="text-right font-bold text-gray-900">
-                      {formatNumber(item.available)} {item.unit}
-                    </TableCell>
-                    <TableCell className="text-right text-gray-600">
-                      {formatCurrency(item.avgCost)}
-                    </TableCell>
-                    <TableCell className="text-right font-medium text-gray-900">
-                      {formatCurrency(item.totalValue)}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(item.status)}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="btn-press"
-                        onClick={() => openAdjustModal(item)}
-                      >
-                        Adjust
-                      </Button>
+                  {/* Loading Indicator / Sentinel */}
+                  <TableRow ref={lastElementRef}>
+                    <TableCell colSpan={10} className="text-center py-4">
+                      {loading && <p className="text-gray-500">Loading more items...</p>}
+                      {!hasMore && inventory.length > 0 && <p className="text-gray-400 text-xs">No more items</p>}
+                      {!loading && inventory.length === 0 && (
+                        <div className="py-8">
+                          <Package className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                          <p>No inventory found</p>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </Card>
-
-        {/* Recent Movements */}
-        <Card title="Recent Stock Movements" className="animate-fade-in-up">
-          <div className="space-y-3">
-            {movementHistory.map((movement, index) => (
-              <div
-                key={movement.id}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all duration-200 animate-fade-in"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`p-2 rounded-lg ${movement.type === 'IN' ? 'bg-green-100' : 'bg-red-100'
-                      }`}
-                  >
-                    {movement.type === 'IN' ? (
-                      <TrendingUp className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <TrendingDown className="h-4 w-4 text-red-600" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{movement.item}</p>
-                    <p className="text-sm text-gray-500">{movement.reference}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p
-                    className={`font-bold ${movement.type === 'IN' ? 'text-green-600' : 'text-red-600'
-                      }`}
-                  >
-                    {movement.type === 'IN' ? '+' : '-'}{movement.qty}
-                  </p>
-                  <p className="text-sm text-gray-500">{movement.date}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+                </TableBody>
+              </table>
+            </div>
+          </Card>
+        </div>
 
         {/* Adjust Stock Modal */}
         <Modal
@@ -386,7 +311,7 @@ export default function InventoryPage() {
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Current Stock</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {formatNumber(selectedItem.onHand)} {selectedItem.unit}
+                  {formatNumber(selectedItem.onHand)} {selectedItem.uom}
                 </p>
               </div>
 

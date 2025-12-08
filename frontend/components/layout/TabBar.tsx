@@ -1,10 +1,12 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useTabContext } from '@/contexts/TabContext';
 import { cn } from '@/lib/utils';
 
 export function FeatureTabBar() {
+    const router = useRouter();
     const { featureTabs, activeFeatureTabId, setActiveFeatureTab, closeFeatureTab } = useTabContext();
 
     if (featureTabs.length === 0) return null;
@@ -16,15 +18,20 @@ export function FeatureTabBar() {
                 const hasDirtyTabs = tab.dataTabs.some(dt => dt.isDirty);
 
                 return (
-                    <button
+                    <div
                         key={tab.id}
-                        onClick={() => setActiveFeatureTab(tab.id)}
+                        onClick={() => {
+                            setActiveFeatureTab(tab.id);
+                            router.push(tab.href);
+                        }}
                         className={cn(
-                            "group flex items-center gap-2 px-4 py-2 text-sm font-medium border-r border-warmgray-700 transition-colors whitespace-nowrap",
+                            "group flex items-center gap-2 px-4 py-2 text-sm font-medium border-r border-warmgray-700 transition-colors whitespace-nowrap cursor-pointer",
                             isActive
                                 ? "bg-primary-600 text-white"
                                 : "bg-warmgray-800 text-warmgray-300 hover:bg-warmgray-700 hover:text-white"
                         )}
+                        role="button"
+                        tabIndex={0}
                     >
                         <span>{tab.title}</span>
                         {hasDirtyTabs && (
@@ -42,7 +49,7 @@ export function FeatureTabBar() {
                         >
                             <X className="h-3.5 w-3.5" />
                         </button>
-                    </button>
+                    </div>
                 );
             })}
         </div>
@@ -50,6 +57,7 @@ export function FeatureTabBar() {
 }
 
 export function DataTabBar() {
+    const router = useRouter();
     const {
         activeFeatureTabId,
         getActiveFeatureTab,
@@ -67,37 +75,46 @@ export function DataTabBar() {
                 const isActive = tab.id === activeFeature.activeDataTabId;
 
                 return (
-                    <button
+                    <div
                         key={tab.id}
-                        onClick={() => setActiveDataTab(activeFeature.id, tab.id)}
+                        onClick={() => {
+                            setActiveDataTab(activeFeature.id, tab.id);
+                            // Only push if href is different/defined (some data tabs might be purely local state?)
+                            // Assuming data tabs should also route if they have unique hrefs
+                            if (tab.href) router.push(tab.href);
+                        }}
                         className={cn(
-                            "group flex items-center gap-2 px-3 py-1.5 text-xs font-medium border-r border-surface-300 transition-colors whitespace-nowrap",
+                            "group flex items-center gap-2 px-3 py-1.5 text-xs font-medium border-r border-surface-300 transition-colors whitespace-nowrap cursor-pointer",
                             isActive
                                 ? "bg-white text-warmgray-900 shadow-sm"
                                 : "bg-surface-100 text-warmgray-600 hover:bg-surface-200 hover:text-warmgray-900"
                         )}
+                        role="button"
+                        tabIndex={0}
                     >
                         {tab.isDirty && (
                             <span className="w-1.5 h-1.5 bg-primary-500 rounded-full" />
                         )}
                         <span>{tab.title}</span>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (tab.isDirty) {
-                                    const confirmed = window.confirm('This tab has unsaved changes. Close anyway?');
-                                    if (!confirmed) return;
-                                }
-                                closeDataTab(activeFeature.id, tab.id);
-                            }}
-                            className={cn(
-                                "p-0.5 rounded hover:bg-warmgray-200 transition-colors opacity-0 group-hover:opacity-100",
-                                isActive ? "text-warmgray-500" : "text-warmgray-400"
-                            )}
-                        >
-                            <X className="h-3 w-3" />
-                        </button>
-                    </button>
+                        {tab.title !== 'Daftar' && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (tab.isDirty) {
+                                        const confirmed = window.confirm('This tab has unsaved changes. Close anyway?');
+                                        if (!confirmed) return;
+                                    }
+                                    closeDataTab(activeFeature.id, tab.id);
+                                }}
+                                className={cn(
+                                    "p-0.5 rounded hover:bg-warmgray-200 transition-colors opacity-0 group-hover:opacity-100",
+                                    isActive ? "text-warmgray-500" : "text-warmgray-400"
+                                )}
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        )}
+                    </div>
                 );
             })}
         </div>

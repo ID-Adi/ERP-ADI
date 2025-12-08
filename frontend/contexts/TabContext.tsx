@@ -1,6 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { menuItems, MenuItem } from '@/config/menu';
 
 // Types
 export interface DataTab {
@@ -46,6 +48,113 @@ const TabContext = createContext<TabContextType | undefined>(undefined);
 export function TabProvider({ children }: { children: ReactNode }) {
     const [featureTabs, setFeatureTabs] = useState<FeatureTab[]>([]);
     const [activeFeatureTabId, setActiveFeatureTabIdState] = useState<string | null>(null);
+    const pathname = usePathname();
+    const router = useRouter();
+
+    // Helper to find menu item by href
+    const findMenuItem = useCallback((items: MenuItem[], path: string): MenuItem | null => {
+        for (const item of items) {
+            if (item.href === path) return item;
+            if (item.children) {
+                const found = findMenuItem(item.children, path);
+                if (found) return found;
+            }
+        }
+        return null;
+    }, []);
+
+    // Helper to find parent menu item for sub-routes like /new, /edit/[id]
+    const findParentMenuItem = useCallback((items: MenuItem[], path: string): MenuItem | null => {
+        let bestMatch: MenuItem | null = null;
+        let maxLength = -1;
+
+        const traverse = (currentItems: MenuItem[]) => {
+            for (const item of currentItems) {
+                if (item.href) {
+                    // Check for exact match or prefix match
+                    const isExact = item.href === path;
+                    const isPrefix = path.startsWith(item.href + '/');
+
+                    if ((isExact || isPrefix) && item.href.length > maxLength) {
+                        maxLength = item.href.length;
+                        bestMatch = item;
+                    }
+                }
+
+                if (item.children) {
+                    traverse(item.children);
+                }
+            }
+        };
+
+        traverse(items);
+        return bestMatch;
+    }, []);
+
+    // Sync tabs with URL
+    useEffect(() => {
+        // Skip for dashboard root
+        if (pathname === '/dashboard') return;
+
+        // Try exact match first, then parent match for sub-routes
+        let item = findMenuItem(menuItems, pathname);
+        const isSubRoute = !item && pathname.includes('/new') || pathname.includes('/edit');
+
+        if (!item) {
+            item = findParentMenuItem(menuItems, pathname);
+        }
+
+        if (item && item.href) {
+            // Check if tab already exists
+            setFeatureTabs(prev => {
+                const existing = prev.find(t => t.id === item.href);
+                if (!existing) {
+                    // Open new tab WITH default data tab
+                    const defaultDataTab: DataTab = {
+                        id: `${item.href}-list`,
+                        title: 'Daftar',
+                        href: item.href!
+                    };
+
+                    return [...prev, {
+                        id: item.href!,
+                        title: item.title,
+                        href: item.href!,
+                        dataTabs: [defaultDataTab],
+                        activeDataTabId: defaultDataTab.id
+                    }];
+                }
+                return prev;
+            });
+            setActiveFeatureTabIdState(item.href);
+        }
+    }, [pathname, findMenuItem, findParentMenuItem]);
+
+    // Load from LocalStorage on mount
+    useEffect(() => {
+        const savedTabs = localStorage.getItem('erp-feature-tabs');
+        const savedActiveId = localStorage.getItem('erp-active-feature-tab');
+        if (savedTabs) {
+            try {
+                setFeatureTabs(JSON.parse(savedTabs));
+            } catch (e) {
+                console.error("Failed to parse tabs from local storage", e);
+            }
+        }
+        if (savedActiveId) {
+            setActiveFeatureTabIdState(savedActiveId);
+        }
+    }, []);
+
+    // Save to LocalStorage on change
+    useEffect(() => {
+        if (featureTabs.length > 0) {
+            localStorage.setItem('erp-feature-tabs', JSON.stringify(featureTabs));
+        }
+        if (activeFeatureTabId) {
+            localStorage.setItem('erp-active-feature-tab', activeFeatureTabId);
+        }
+    }, [featureTabs, activeFeatureTabId]);
 
     // Open a new feature tab or switch to existing one
     const openFeatureTab = useCallback((tab: Omit<FeatureTab, 'dataTabs' | 'activeDataTabId'>) => {
@@ -61,18 +170,34 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
     // Close a feature tab
     const closeFeatureTab = useCallback((id: string) => {
+        let nextPath = '/dashboard';
+
         setFeatureTabs(prev => {
             const newTabs = prev.filter(t => t.id !== id);
             return newTabs;
         });
+
         setActiveFeatureTabIdState(prev => {
             if (prev === id) {
                 const remaining = featureTabs.filter(t => t.id !== id);
-                return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
+                if (remaining.length > 0) {
+                    const nextTab = remaining[remaining.length - 1];
+                    nextPath = nextTab.href;
+                    return nextTab.id;
+                }
+                nextPath = '/dashboard';
+                return null;
             }
+            // If we are not closing the active tab, we don't need to navigate
+            // But we need to signal that we shouldn't navigate
+            nextPath = '';
             return prev;
         });
-    }, [featureTabs]);
+
+        if (nextPath) {
+            router.push(nextPath);
+        }
+    }, [featureTabs, router]);
 
     // Set active feature tab
     const setActiveFeatureTab = useCallback((id: string) => {

@@ -82,11 +82,11 @@ const recentTransactions = [
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-6 lg:px-8 py-6">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-warmgray-900">Dashboard</h1>
-        <p className="text-sm text-warmgray-500 mt-1">Welcome back! Here's what's happening today.</p>
+        <p className="text-sm text-warmgray-500 mt-1">Welcome back! Here&apos;s what&apos;s happening today.</p>
       </div>
 
       {/* KPI Cards */}
@@ -194,10 +194,10 @@ export default function DashboardPage() {
                   <td className="px-5 py-3 text-center">
                     <span
                       className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${transaction.status === 'paid'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : transaction.status === 'pending'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-red-100 text-red-700'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : transaction.status === 'pending'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-red-100 text-red-700'
                         }`}
                     >
                       {transaction.status}

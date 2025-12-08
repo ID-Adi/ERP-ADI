@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui";
 import { TabProvider } from "@/contexts/TabContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,11 +20,13 @@ export default function RootLayout({
   return (
     <html lang="id">
       <body className={inter.className}>
-        <TabProvider>
-          <ToastProvider>
-            {children}
-          </ToastProvider>
-        </TabProvider>
+        <AuthProvider>
+          <TabProvider>
+            <ToastProvider>
+              {children}
+            </ToastProvider>
+          </TabProvider>
+        </AuthProvider>
       </body>
     </html>
   );

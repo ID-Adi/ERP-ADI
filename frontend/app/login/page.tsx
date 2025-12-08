@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
-  const router = useRouter();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -43,12 +43,17 @@ export default function LoginPage() {
       return;
     }
 
-    // Simulasi login (nanti akan diganti dengan API call)
-    setTimeout(() => {
+    // Login API Call
+    try {
+      setIsLoading(true);
+      await login(formData);
+      // Redirect handled in login function
+    } catch (err: any) {
       setIsLoading(false);
-      // Redirect ke dashboard
-      router.push('/dashboard');
-    }, 1500);
+      setErrors({
+        form: err.response?.data?.message || 'Login gagal. Periksa email dan password Anda.'
+      });
+    }
   };
 
   return (
@@ -66,6 +71,11 @@ export default function LoginPage() {
           </div>
 
           {/* Form */}
+          {errors.form && (
+            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4 text-center">
+              {errors.form}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               label="Email"
