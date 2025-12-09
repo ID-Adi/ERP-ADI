@@ -1,0 +1,90 @@
+
+> erp-adi-backend@0.1.0 dev
+> ts-node-dev --respawn --transpile-only src/index.ts
+
+[INFO] 13:50:44 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+🚀 Server running on port 4005
+[0mGET /api/items?limit=50&page=1 [32m200[0m 1300.735 ms - 36015[0m
+[0mHEAD /api/items [32m200[0m 663.020 ms - 14446[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 737.552 ms - 36015[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 737.927 ms - 36015[0m
+[0mGET /api/items?limit=50&page=2 [32m200[0m 693.212 ms - 36015[0m
+[0mGET /api/items?limit=50&page=3 [32m200[0m 700.869 ms - 36015[0m
+[0mGET /api/items?limit=50&page=4 [32m200[0m 696.482 ms - 36015[0m
+[0mGET /api/items?limit=50&page=5 [32m200[0m 697.334 ms - 36015[0m
+[0mGET /api/items?limit=50&page=6 [32m200[0m 696.121 ms - 36015[0m
+[0mGET /api/items?limit=50&page=7 [32m200[0m 703.656 ms - 36009[0m
+[0mGET /api/items?limit=50&page=8 [32m200[0m 706.113 ms - 35965[0m
+[0mGET /api/items?limit=50&page=9 [32m200[0m 668.253 ms - 35325[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 741.336 ms - 36015[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 1071.788 ms - 36015[0m
+[0mGET /api/items?limit=50&page=2 [32m200[0m 689.657 ms - 36015[0m
+[0mGET /api/items?limit=50&page=3 [32m200[0m 717.755 ms - 36015[0m
+[0mGET /api/items?limit=50&page=4 [32m200[0m 688.199 ms - 36015[0m
+[0mGET /api/items?limit=50&page=5 [32m200[0m 678.431 ms - 36015[0m
+[0mGET /api/items?limit=50&page=6 [32m200[0m 689.799 ms - 36015[0m
+[0mGET /api/fakturs?page=1&limit=20 [32m200[0m 758.143 ms - 1341[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 770.647 ms - 36015[0m
+[0mGET /api/items?limit=50&page=2 [32m200[0m 715.058 ms - 36015[0m
+[0mGET /api/items?limit=50&page=3 [32m200[0m 699.582 ms - 36015[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 734.272 ms - 36015[0m
+[0mGET /api/fakturs?page=1&limit=20 [32m200[0m 502.748 ms - 1341[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 730.547 ms - 36015[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 1314.516 ms - 36015[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 739.196 ms - 36015[0m
+[0mGET /api/items?limit=50&page=2 [32m200[0m 695.192 ms - 36015[0m
+[0mGET /api/items?limit=50&page=1 [0m-[0m - ms - -[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 735.693 ms - 36015[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 699.717 ms - 36015[0m
+[0mGET /api/items?limit=50&page=2 [32m200[0m 753.202 ms - 36015[0m
+[0mGET /api/items?limit=50&page=3 [32m200[0m 707.396 ms - 36015[0m
+[0mGET /api/items?limit=50&page=4 [32m200[0m 714.631 ms - 36015[0m
+[0mGET /api/items?limit=50&page=5 [32m200[0m 731.626 ms - 36015[0m
+[0mGET /api/items?limit=50&page=6 [32m200[0m 726.467 ms - 36015[0m
+[0mGET /api/items?limit=50&page=7 [32m200[0m 696.344 ms - 36009[0m
+[0mGET /api/items?limit=50&page=8 [32m200[0m 707.368 ms - 35965[0m
+[0mGET /api/items?limit=50&page=9 [32m200[0m 685.197 ms - 35325[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 749.635 ms - 36015[0m
+[0mGET /api/items?limit=50&page=2 [32m200[0m 728.313 ms - 36015[0m
+[0mGET /api/items?limit=50&page=3 [32m200[0m 718.756 ms - 36015[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 713.311 ms - 36015[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 761.485 ms - 36015[0m
+[INFO] 14:16:17 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
+🚀 Server running on port 4005
+DEBUG SEARCH: "ELG"
+DEBUG SEARCH WHERE: {
+  "OR": [
+    {
+      "name": {
+        "contains": "ELG",
+        "mode": "insensitive"
+      }
+    },
+    {
+      "code": {
+        "contains": "ELG",
+        "mode": "insensitive"
+      }
+    }
+  ]
+}
+[0mGET /api/items?limit=10&page=1&search=ELG [32m200[0m 1576.814 ms - 7256[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 845.876 ms - 36015[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 747.869 ms - 36015[0m
+[0mGET /api/items?limit=50&page=2 [32m200[0m 676.199 ms - 36015[0m
+[0mGET /api/items?limit=50&page=3 [32m200[0m 695.915 ms - 36015[0m
+[0mGET /api/items?limit=50&page=4 [32m200[0m 695.927 ms - 36015[0m
+[0mGET /api/items?limit=50&page=5 [32m200[0m 697.763 ms - 36015[0m
+[0mGET /api/items?limit=50&page=6 [32m200[0m 681.509 ms - 36015[0m
+[0mGET /api/items?limit=50&page=7 [32m200[0m 794.511 ms - 36009[0m
+[0mGET /api/items?limit=50&page=8 [32m200[0m 678.141 ms - 35965[0m
+[0mGET /api/items?limit=50&page=9 [32m200[0m 690.808 ms - 35325[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 1001.059 ms - 36015[0m
+[0mGET /api/items?limit=50&page=2 [32m200[0m 705.150 ms - 36015[0m
+[0mGET /api/items?limit=50&page=3 [32m200[0m 683.164 ms - 36015[0m
+[0mGET /api/items?limit=50&page=4 [32m200[0m 694.404 ms - 36015[0m
+[0mGET /api/items?limit=50&page=5 [32m200[0m 763.098 ms - 36015[0m
+[0mGET /api/items?limit=50&page=6 [32m200[0m 716.130 ms - 36015[0m
+[0mGET /api/items?limit=50&page=7 [32m200[0m 678.904 ms - 36009[0m
+[0mGET /api/items?limit=50&page=8 [32m200[0m 721.907 ms - 35965[0m
+[0mGET /api/items?limit=50&page=9 [32m200[0m 683.958 ms - 35325[0m

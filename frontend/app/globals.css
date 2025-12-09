@@ -146,7 +146,7 @@ body {
   /* Input Focus Glow */
   .input-glow:focus {
     @apply ring-2 ring-primary-500/50 border-primary-500;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1);
   }
 
   /* Page Transition Container */
@@ -335,11 +335,11 @@ body {
 
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 0 0 rgba(217, 119, 87, 0.4);
   }
 
   50% {
-    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+    box-shadow: 0 0 0 10px rgba(217, 119, 87, 0);
   }
 }
 
@@ -464,8 +464,8 @@ body {
    ======================================== */
 
 ::selection {
-  background: rgba(59, 130, 246, 0.2);
-  color: #1e40af;
+  background: rgba(217, 119, 87, 0.2);
+  color: #5C2E1E;
 }
 
 /* ========================================
@@ -473,6 +473,6 @@ body {
    ======================================== */
 
 *:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #D97757;
   outline-offset: 2px;
 }

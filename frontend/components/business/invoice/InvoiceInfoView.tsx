@@ -1,6 +1,9 @@
 'use client';
 
-import { Calendar, MapPin, Truck, AlertCircle, Search, X } from 'lucide-react';
+import { MapPin, Truck, AlertCircle, Search, X, Receipt } from 'lucide-react';
+import SearchableSelect from '@/components/ui/SearchableSelect';
+import DatePicker from '@/components/ui/DatePicker';
+import { cn } from '@/lib/utils';
 
 interface InvoiceInfoViewProps {
     formData: any;
@@ -21,38 +24,43 @@ export default function InvoiceInfoView({ formData, onChange }: InvoiceInfoViewP
                 <div className="space-y-4">
                     {/* Payment Terms */}
                     <div className="grid grid-cols-12 gap-4 items-center">
-                        <label className="col-span-4 text-sm font-medium text-warmgray-700">Syarat Pembayaran</label>
-                        <div className="col-span-8 relative">
-                            <div className="w-full pl-3 pr-8 py-2 border border-warmgray-300 rounded text-sm bg-blue-50/20 flex items-center justify-between cursor-pointer hover:border-blue-400">
-                                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1">
-                                    Set Manual <X className="h-3 w-3 cursor-pointer hover:text-blue-900" />
-                                </span>
-                                <Search className="h-4 w-4 text-warmgray-400" />
-                            </div>
+                        <label className="col-span-4 text-sm font-medium text-warmgray-700">
+                            Syarat Pembayaran <span className="text-red-500">*</span>
+                        </label>
+                        <div className="col-span-8">
+                            <SearchableSelect
+                                options={[
+                                    { value: 'NET30', label: 'Net 30 Days' },
+                                    { value: 'NET60', label: 'Net 60 Days' },
+                                    { value: 'COD', label: 'Cash on Delivery' },
+                                    { value: 'CIA', label: 'Cash in Advance' },
+                                ]}
+                                value={formData.paymentTerms}
+                                onChange={(val) => onChange('paymentTerms', val)}
+                                placeholder="Pilih Syarat Pembayaran..."
+                                required
+                            />
                         </div>
                     </div>
 
                     {/* Due Date */}
                     <div className="grid grid-cols-12 gap-4 items-center">
                         <label className="col-span-4 text-sm font-medium text-warmgray-700">Jatuh Tempo</label>
-                        <div className="col-span-8 relative">
-                            <input
-                                type="date"
+                        <div className="col-span-8">
+                            <DatePicker
                                 value={formData.dueDate}
                                 onChange={(e) => onChange('dueDate', e.target.value)}
-                                className="w-full pl-3 pr-8 py-2 border border-warmgray-300 rounded text-sm focus:ring-1 focus:ring-primary-500"
                             />
-                            <Calendar className="absolute right-2 top-2.5 h-4 w-4 text-warmgray-400 pointer-events-none" />
                         </div>
                     </div>
 
-                    {/* PO Number */}
+                    {/* No. PO */}
                     <div className="grid grid-cols-12 gap-4 items-center">
                         <label className="col-span-4 text-sm font-medium text-warmgray-700">No. PO</label>
                         <div className="col-span-8">
                             <input
                                 type="text"
-                                className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:ring-1 focus:ring-primary-500"
+                                className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                             />
                         </div>
                     </div>
@@ -61,29 +69,14 @@ export default function InvoiceInfoView({ formData, onChange }: InvoiceInfoViewP
                     <div className="grid grid-cols-12 gap-4 items-start">
                         <label className="col-span-4 text-sm font-medium text-warmgray-700 pt-2">Alamat</label>
                         <div className="col-span-8 flex gap-2">
-                            <button className="p-2 border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 h-min">
+                            <button className="p-2 border border-warmgray-300 rounded bg-white text-warmgray-600 hover:bg-warmgray-50 h-min">
                                 <MapPin className="h-4 w-4" />
                             </button>
                             <textarea
                                 rows={4}
-                                className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:ring-1 focus:ring-primary-500 resize-none font-mono"
-                                value="DESA TEWAH
-KUALA KURUN KALIMANTAN TENGAH
-INDONESIA" // Dummy default
+                                className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 resize-none font-mono"
+                                value="DESA TEWAH&#10;KUALA KURUN KALIMANTAN TENGAH&#10;INDONESIA" // Dummy default with newlines
                             />
-                        </div>
-                    </div>
-
-                    {/* Branch */}
-                    <div className="grid grid-cols-12 gap-4 items-center">
-                        <label className="col-span-4 text-sm font-medium text-warmgray-700">Cabang <span className="text-red-500">*</span></label>
-                        <div className="col-span-8 relative">
-                            <div className="w-full pl-3 pr-8 py-2 border border-warmgray-300 rounded text-sm bg-white flex items-center justify-between cursor-pointer">
-                                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1">
-                                    CABANG PALANGKARAYA <X className="h-3 w-3 cursor-pointer" />
-                                </span>
-                                <Search className="h-4 w-4 text-warmgray-400" />
-                            </div>
                         </div>
                     </div>
 
@@ -93,7 +86,7 @@ INDONESIA" // Dummy default
                         <div className="col-span-8">
                             <textarea
                                 rows={3}
-                                className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:ring-1 focus:ring-primary-500 resize-none"
+                                className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 resize-none"
                                 value={formData.memo}
                                 onChange={(e) => onChange('memo', e.target.value)}
                                 placeholder="Catatan tambahan..."
@@ -109,20 +102,59 @@ INDONESIA" // Dummy default
                 {/* Tax Info */}
                 <div className="space-y-4">
                     <div className="flex items-center gap-2 text-primary-700 font-semibold border-b border-primary-100 pb-2">
-                        <FileText className="h-5 w-5" /> {/* Imported via InvoiceItemsView, define it again if needed or use AlertCircle */}
+                        <Receipt className="h-5 w-5" />
                         <h3>Info Pajak</h3>
                     </div>
 
                     <div className="grid grid-cols-12 gap-4">
-                        <label className="col-span-4 text-sm font-medium text-warmgray-700">Pajak (i)</label>
-                        <div className="col-span-8 flex gap-6">
-                            <label className="flex items-center gap-2 text-sm text-warmgray-700 cursor-pointer">
-                                <input type="checkbox" className="rounded border-warmgray-300 text-primary-600 focus:ring-primary-500" />
-                                <span>Kena Pajak</span>
+                        <label className="col-span-4 text-sm font-medium text-warmgray-700 pt-1">Pengaturan Pajak</label>
+                        <div className="col-span-8 space-y-3">
+                            {/* Option 1: Exclusive (Tax Added) */}
+                            <label className={cn(
+                                "flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all",
+                                !formData.taxInclusive ? "border-primary-500 bg-primary-50 ring-1 ring-primary-500" : "border-warmgray-200 hover:border-warmgray-300"
+                            )}>
+                                <div className={cn(
+                                    "w-4 h-4 rounded-full border border-warmgray-400 flex items-center justify-center bg-white",
+                                    !formData.taxInclusive && "border-primary-600"
+                                )}>
+                                    {!formData.taxInclusive && <div className="w-2 h-2 rounded-full bg-primary-600" />}
+                                </div>
+                                <input
+                                    type="radio"
+                                    name="tax_mode"
+                                    className="hidden"
+                                    checked={!formData.taxInclusive}
+                                    onChange={() => onChange('taxInclusive', false)}
+                                />
+                                <div className="flex flex-col">
+                                    <span className={cn("text-sm font-medium", !formData.taxInclusive ? "text-primary-900" : "text-warmgray-700")}>Harga Belum Termasuk Pajak</span>
+                                    <span className="text-xs text-warmgray-500">Pajak (PPN 11%) ditambahkan pada total</span>
+                                </div>
                             </label>
-                            <label className="flex items-center gap-2 text-sm text-warmgray-700 cursor-pointer">
-                                <input type="checkbox" className="rounded border-warmgray-300 text-primary-600 focus:ring-primary-500" />
-                                <span>Total termasuk Pajak</span>
+
+                            {/* Option 2: Inclusive (Tax Included) */}
+                            <label className={cn(
+                                "flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all",
+                                formData.taxInclusive ? "border-primary-500 bg-primary-50 ring-1 ring-primary-500" : "border-warmgray-200 hover:border-warmgray-300"
+                            )}>
+                                <div className={cn(
+                                    "w-4 h-4 rounded-full border border-warmgray-400 flex items-center justify-center bg-white",
+                                    formData.taxInclusive && "border-primary-600"
+                                )}>
+                                    {formData.taxInclusive && <div className="w-2 h-2 rounded-full bg-primary-600" />}
+                                </div>
+                                <input
+                                    type="radio"
+                                    name="tax_mode"
+                                    className="hidden"
+                                    checked={formData.taxInclusive}
+                                    onChange={() => onChange('taxInclusive', true)}
+                                />
+                                <div className="flex flex-col">
+                                    <span className={cn("text-sm font-medium", formData.taxInclusive ? "text-primary-900" : "text-warmgray-700")}>Harga Sudah Termasuk Pajak</span>
+                                    <span className="text-xs text-warmgray-500">Pajak sudah termasuk dalam harga barang</span>
+                                </div>
                             </label>
                         </div>
                     </div>
@@ -144,12 +176,13 @@ INDONESIA" // Dummy default
                         </div>
 
                         {/* Shipping Date */}
-                        <div className="grid grid-cols-12 gap-4 items-center z-10 relative">
+                        <div className="grid grid-cols-12 gap-4 items-center z-20 relative">
                             <label className="col-span-4 text-sm font-medium text-warmgray-700">Tgl Pengiriman</label>
-                            <div className="col-span-8 relative">
-                                <input
-                                    type="date"
-                                    className="w-40 px-3 py-1.5 border border-warmgray-300 rounded text-sm focus:ring-1 focus:ring-primary-500"
+                            <div className="col-span-8">
+                                <DatePicker
+                                    value={formData.shippingDate}
+                                    onChange={(e) => onChange('shippingDate', e.target.value)}
+                                    className="max-w-[180px]"
                                 />
                             </div>
                         </div>
@@ -161,7 +194,7 @@ INDONESIA" // Dummy default
                                 <input
                                     type="text"
                                     placeholder="Cari/Pilih..."
-                                    className="w-full px-3 py-1.5 border border-warmgray-300 rounded text-sm focus:ring-1 focus:ring-primary-500"
+                                    className="w-full px-3 py-1.5 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                                 />
                                 <Search className="absolute right-2 top-2 h-4 w-4 text-warmgray-400" />
                             </div>
@@ -174,7 +207,7 @@ INDONESIA" // Dummy default
                                 <input
                                     type="text"
                                     placeholder="Cari/Pilih..."
-                                    className="w-full px-3 py-1.5 border border-warmgray-300 rounded text-sm focus:ring-1 focus:ring-primary-500"
+                                    className="w-full px-3 py-1.5 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                                 />
                                 <Search className="absolute right-2 top-2 h-4 w-4 text-warmgray-400" />
                             </div>
@@ -183,36 +216,7 @@ INDONESIA" // Dummy default
                     </div>
                 </div>
 
-                {/* Additional Info Header (Empty content in ref image) */}
-                <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-primary-700 font-semibold border-b border-primary-100 pb-2">
-                        <AlertCircle className="h-5 w-5" />
-                        <h3>Info Tambahan</h3>
-                    </div>
-                </div>
-
             </div>
         </div>
-    );
-}
-
-// Helper icons
-function FileText(props: any) {
-    return (
-        <svg
-            {...props}
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-            <polyline points="14 2 14 8 20 8" />
-        </svg>
     );
 }

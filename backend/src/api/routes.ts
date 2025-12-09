@@ -8,6 +8,9 @@ import unitRoutes from './controllers/unit.controller';
 import categoryRoutes from './controllers/category.controller';
 
 import accountRoutes from './controllers/account.controller';
+import reportRoutes from './controllers/report.controller';
+import warehouseRoutes from './controllers/warehouse.controller';
+import salesReceiptRoutes from './controllers/salesReceipt.controller';
 
 const router = Router();
 
@@ -23,5 +26,8 @@ router.use('/fakturs', fakturRoutes);
 router.use('/units', unitRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/accounts', accountRoutes);
+router.use('/reports', reportRoutes);
+router.use('/warehouses', warehouseRoutes);
+router.use('/sales-receipts', salesReceiptRoutes);
 
 export default router;

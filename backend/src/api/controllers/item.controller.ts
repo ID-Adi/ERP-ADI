@@ -4,8 +4,8 @@ import { PrismaClient, PriceType } from '@prisma/client';
 const prisma = new PrismaClient();
 const router = Router();
 
-// GET /api/items
-router.get('/', async (req: Request, res: Response) => {
+// GET /api/items/list - Lightweight endpoint for list views (no heavy joins)
+router.get('/list', async (req: Request, res: Response) => {
     try {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 20;
@@ -14,6 +14,7 @@ router.get('/', async (req: Request, res: Response) => {
         const category = req.query.category as string;
         const type = req.query.type as string;
         const brand = req.query.brand as string;
+
 
         const skip = (page - 1) * limit;
 
@@ -47,79 +48,178 @@ router.get('/', async (req: Request, res: Response) => {
             ];
         }
 
-        const total = await prisma.item.count({ where });
-
-        const items = await prisma.item.findMany({
-            where,
-            skip,
-            take: limit,
-            orderBy: {
-                updatedAt: 'desc',
-            },
-            include: {
-                company: {
-                    select: {
-                        name: true
-                    }
-                },
-                category: {
-                    select: {
-                        id: true,
-                        name: true,
-                        code: true
-                    }
-                },
-                pricing: {
-                    where: { isActive: true },
-                    select: {
-                        id: true,
-                        priceType: true,
-                        price: true,
-                        defaultDiscount: true,
-                        minimumQuantity: true
-                    }
-                },
-                stocks: {
-                    select: {
-                        id: true,
-                        warehouseId: true,
-                        currentStock: true,
-                        availableStock: true,
-                        minStock: true,
-                        warehouse: {
-                            select: {
-                                name: true,
-                                code: true
-                            }
-                        }
-                    }
-                },
-                suppliers: {
-                    where: { isActive: true },
-                    select: {
-                        id: true,
-                        supplierId: true,
-                        isPrimary: true,
-                        purchasePrice: true,
-                        supplier: {
-                            select: {
-                                name: true,
-                                code: true
-                            }
-                        }
-                    }
-                },
-                taxes: {
-                    where: { isActive: true },
-                    select: {
-                        id: true,
-                        taxCode: true,
-                        taxName: true,
-                        taxRate: true
+        // Run count and fetch in parallel for better performance
+        const [total, items] = await Promise.all([
+            prisma.item.count({ where }),
+            prisma.item.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { updatedAt: 'desc' },
+                select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                    uom: true,
+                    isStockItem: true,
+                    isActive: true,
+                    brand: true,
+                    categoryId: true,
+                    category: {
+                        select: { name: true }
+                    },
+                    // Minimal pricing for list display
+                    pricing: {
+                        where: { isActive: true, priceType: 'SELL' },
+                        select: { price: true },
+                        take: 1
+                    },
+                    // Aggregate stock data
+                    stocks: {
+                        select: { currentStock: true, availableStock: true }
                     }
                 }
+            })
+        ]);
+
+        // Lightweight mapping
+        const listItems = items.map(item => ({
+            id: item.id,
+            name: item.name,
+            code: item.code,
+            unit: item.uom,
+            type: item.isStockItem ? 'Persediaan' : 'Jasa',
+            isActive: item.isActive,
+            brand: item.brand,
+            categoryName: item.category?.name || '-',
+            sellPrice: item.pricing[0] ? Number(item.pricing[0].price) : 0,
+            warehouseQty: item.stocks.reduce((sum, s) => sum + Number(s.currentStock), 0),
+            sellableStock: item.stocks.reduce((sum, s) => sum + Number(s.availableStock), 0)
+        }));
+
+        res.json({
+            data: listItems,
+            meta: {
+                total,
+                page,
+                limit,
+                last_page: Math.ceil(total / limit)
             }
         });
+
+    } catch (error) {
+        console.error('Error fetching items list:', error);
+        res.status(500).json({ error: 'Failed to fetch items list' });
+    }
+});
+
+// GET /api/items
+router.get('/', async (req: Request, res: Response) => {
+    try {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+        const search = (req.query.search as string)?.trim();
+        const status = req.query.status as string;
+        const category = req.query.category as string;
+        const type = req.query.type as string;
+        const brand = req.query.brand as string;
+
+        const skip = (page - 1) * limit;
+
+        const where: any = {};
+
+        if (status && status !== 'Semua') {
+            if (status === 'Non Aktif') {
+                where.isActive = false;
+            } else if (status === 'Aktif') {
+                where.isActive = true;
+            }
+        }
+
+        if (category && category !== 'Semua') {
+            where.categoryId = category;
+        }
+
+        if (brand && brand !== 'Semua') {
+            where.brand = brand;
+        }
+
+        // ... (type filter logic is fine)
+
+        if (search) {
+            console.log(`DEBUG SEARCH: "${search}"`);
+            where.OR = [
+                { name: { contains: search, mode: 'insensitive' } },
+                { code: { contains: search, mode: 'insensitive' } },
+            ];
+            console.log(`DEBUG SEARCH WHERE:`, JSON.stringify(where, null, 2));
+        }
+
+        if (type && type !== 'Semua') {
+            if (type === 'Persediaan') where.isStockItem = true;
+            else if (type === 'Jasa') where.isStockItem = false;
+        }
+
+        if (search) {
+            where.OR = [
+                { name: { contains: search, mode: 'insensitive' } },
+                { code: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+
+        // Run count and fetch in parallel for better performance
+        const [total, items] = await Promise.all([
+            prisma.item.count({ where }),
+            prisma.item.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { updatedAt: 'desc' },
+                include: {
+                    company: { select: { name: true } },
+                    category: { select: { id: true, name: true, code: true } },
+                    pricing: {
+                        where: { isActive: true },
+                        select: {
+                            id: true,
+                            priceType: true,
+                            price: true,
+                            defaultDiscount: true,
+                            minimumQuantity: true
+                        }
+                    },
+                    stocks: {
+                        select: {
+                            id: true,
+                            warehouseId: true,
+                            currentStock: true,
+                            availableStock: true,
+                            minStock: true,
+                            warehouse: { select: { name: true, code: true } }
+                        }
+                    },
+                    suppliers: {
+                        where: { isActive: true },
+                        select: {
+                            id: true,
+                            supplierId: true,
+                            isPrimary: true,
+                            purchasePrice: true,
+                            supplier: { select: { name: true, code: true } }
+                        }
+                    },
+                    taxes: {
+                        where: { isActive: true },
+                        select: {
+                            id: true,
+                            taxCode: true,
+                            taxName: true,
+                            taxRate: true
+                        }
+                    }
+                }
+            })
+        ]);
 
         // Map to frontend structure
         const enrichedItems = items.map(item => {
@@ -326,6 +426,185 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 });
 
+// POST /api/items/batch - Batch create items from Excel import
+router.post('/batch', async (req: Request, res: Response) => {
+    try {
+        const items = req.body; // Array of item objects
+
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'Data tidak valid atau kosong' });
+        }
+
+        // Get default company
+        const defaultCompany = await prisma.company.findFirst();
+        if (!defaultCompany) {
+            return res.status(500).json({ error: 'No company found' });
+        }
+
+        // Get or create default warehouse
+        let defaultWarehouse = await prisma.warehouse.findFirst({
+            where: { companyId: defaultCompany.id }
+        });
+
+        if (!defaultWarehouse) {
+            defaultWarehouse = await prisma.warehouse.create({
+                data: {
+                    companyId: defaultCompany.id,
+                    code: 'WH-DEFAULT',
+                    name: 'Gudang Utama',
+                    isActive: true,
+                    updatedAt: new Date()
+                }
+            });
+        }
+
+        const stats = {
+            success: 0,
+            failed: 0,
+            errors: [] as string[]
+        };
+
+        // Process sequentially to avoid race conditions on unique constraints if any
+        // For better performance with large datasets, we might want to optimize this,
+        // but for < 1000 items, sequential processing is safer and easier to debug.
+        // We will wrap EACH item creation in its own transaction (or large transaction?)
+        // If we wrap ALL in one transaction, one failure rolls back everything.
+        // Usually for imports, "all or nothing" is good, OR "succeed what you can".
+        // Let's go with "Succeed what you can" logic so 1 bad row doesn't block 99 good ones.
+
+        for (const itemData of items) {
+            try {
+                // destruct and defaults
+                let {
+                    name,
+                    code,
+                    categoryId,
+                    type,
+                    unit,
+                    description,
+                    brand,
+                    sellPrice,
+                    purchasePrice,
+                    minStock,
+                    kategori
+                } = itemData;
+
+                // Validate basic requirements
+                if (!name) {
+                    stats.failed++;
+                    stats.errors.push(`Row skipped: Nama Barang wajib diisi`);
+                    continue;
+                }
+
+                // Handle Category Lookup by Name if ID not provided
+                let finalCategoryId = categoryId;
+                if (!finalCategoryId && kategori) {
+                    const cat = await prisma.itemCategory.findFirst({
+                        where: { name: { equals: kategori, mode: 'insensitive' }, companyId: defaultCompany.id }
+                    });
+                    if (cat) finalCategoryId = cat.id;
+                }
+
+                // Auto-generate code if missing
+                if (!code || code === 'Otomatis' || code === '') {
+                    const prefix = 'ITM';
+                    const timestamp = Date.now().toString().slice(-6);
+                    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+                    code = `${prefix}-${timestamp}-${random}`;
+                    // Small delay to ensure timestamp uniqueness if tight loop
+                    await new Promise(r => setTimeout(r, 2));
+                }
+
+                // Check duplicate code
+                const existing = await prisma.item.findFirst({
+                    where: { companyId: defaultCompany.id, code: code }
+                });
+
+                if (existing) {
+                    stats.failed++;
+                    stats.errors.push(`Item '${name}': Kode '${code}' sudah ada`);
+                    continue;
+                }
+
+                // Create Item Transaction
+                await prisma.$transaction(async (tx) => {
+                    // 1. Create item
+                    const newItem = await tx.item.create({
+                        data: {
+                            companyId: defaultCompany.id,
+                            name,
+                            code,
+                            categoryId: finalCategoryId || null,
+                            description,
+                            uom: unit || 'PCS',
+                            brand: brand || null,
+                            isStockItem: type !== 'Jasa', // Default Persediaan
+                            isActive: true,
+                        }
+                    });
+
+                    // 2. Pricing
+                    const pricingData = [];
+                    if (sellPrice) {
+                        pricingData.push({
+                            id: crypto.randomUUID(),
+                            itemId: newItem.id,
+                            priceType: 'SELL' as PriceType,
+                            price: Number(sellPrice),
+                            currency: 'IDR',
+                            isActive: true,
+                            updatedAt: new Date()
+                        });
+                    }
+                    if (purchasePrice) {
+                        pricingData.push({
+                            id: crypto.randomUUID(),
+                            itemId: newItem.id,
+                            priceType: 'PURCHASE' as PriceType,
+                            price: Number(purchasePrice),
+                            currency: 'IDR',
+                            isActive: true,
+                            updatedAt: new Date()
+                        });
+                    }
+                    if (pricingData.length > 0) {
+                        await tx.itemPricing.createMany({ data: pricingData });
+                    }
+
+                    // 3. Stock
+                    await tx.itemStock.create({
+                        data: {
+                            id: crypto.randomUUID(),
+                            itemId: newItem.id,
+                            warehouseId: defaultWarehouse!.id,
+                            minStock: minStock ? Number(minStock) : 0,
+                            currentStock: 0,
+                            availableStock: 0,
+                            updatedAt: new Date()
+                        }
+                    });
+                });
+
+                stats.success++;
+
+            } catch (err: any) {
+                console.error('Import Row Error:', err);
+                stats.failed++;
+                stats.errors.push(`Item '${itemData.name || 'Unknown'}': ${err.message}`);
+            }
+        }
+
+        res.json({
+            message: 'Proses import selesai',
+            stats
+        });
+
+    } catch (error) {
+        console.error('Batch Import Error:', error);
+        res.status(500).json({ error: 'Gagal memproses import' });
+    }
+});
+
 // POST /api/items - Create new item with relations
 router.post('/', async (req: Request, res: Response) => {
     try {
@@ -365,6 +644,9 @@ router.post('/', async (req: Request, res: Response) => {
             // Category product type (from form)
             kategoriProduk,
             idHppPky,
+
+            // Accounts
+            accounts, // Array of { accountType: string, accountId: string }
         } = req.body;
 
         // Auto-generate code if needed
@@ -530,6 +812,23 @@ router.post('/', async (req: Request, res: Response) => {
                 });
             }
 
+            // 6. Create Account mappings
+            if (Array.isArray(accounts) && accounts.length > 0) {
+                const accountData = accounts
+                    .filter((acc: any) => acc.accountId && acc.accountType)
+                    .map((acc: any) => ({
+                        id: crypto.randomUUID(),
+                        itemId: newItem.id,
+                        accountType: acc.accountType as any, // Enum
+                        accountId: acc.accountId,
+                        createdAt: new Date()
+                    }));
+
+                if (accountData.length > 0) {
+                    await tx.itemAccount.createMany({ data: accountData });
+                }
+            }
+
             return newItem;
         });
 
@@ -569,6 +868,9 @@ router.put('/:id', async (req: Request, res: Response) => {
             primarySupplierId,
             taxCode,
             taxRate,
+
+            // Accounts
+            accounts,
         } = req.body;
 
         // Check item exists
@@ -664,6 +966,29 @@ router.put('/:id', async (req: Request, res: Response) => {
                         reorderPoint: minStock
                     }
                 });
+            }
+
+            // 5. Update Accounts
+            if (Array.isArray(accounts)) {
+                // Delete existing mappings
+                await tx.itemAccount.deleteMany({
+                    where: { itemId: id }
+                });
+
+                // Create new mappings
+                const accountData = accounts
+                    .filter((acc: any) => acc.accountId && acc.accountType)
+                    .map((acc: any) => ({
+                        id: crypto.randomUUID(),
+                        itemId: id,
+                        accountType: acc.accountType as any,
+                        accountId: acc.accountId,
+                        createdAt: new Date()
+                    }));
+
+                if (accountData.length > 0) {
+                    await tx.itemAccount.createMany({ data: accountData });
+                }
             }
 
             return updatedItem;

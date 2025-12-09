@@ -58,40 +58,7 @@ export default function TabbedInvoiceEditor({ children, initialTabData }: Tabbed
   const activeTab = tabs.find((tab) => tab.id === activeTabId)!;
 
   // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+N atau Cmd+N - New tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-        e.preventDefault();
-        addTab();
-      }
 
-      // Ctrl+W atau Cmd+W - Close tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
-        e.preventDefault();
-        closeTab(activeTabId);
-      }
-
-      // Ctrl+Tab - Next tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Tab' && !e.shiftKey) {
-        e.preventDefault();
-        const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
-        const nextIndex = (currentIndex + 1) % tabs.length;
-        setActiveTabId(tabs[nextIndex].id);
-      }
-
-      // Ctrl+Shift+Tab - Previous tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Tab' && e.shiftKey) {
-        e.preventDefault();
-        const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
-        const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-        setActiveTabId(tabs[prevIndex].id);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tabs, activeTabId]);
 
   // Add new tab
   const addTab = useCallback(() => {
@@ -172,10 +139,10 @@ export default function TabbedInvoiceEditor({ children, initialTabData }: Tabbed
         prev.map((tab) =>
           tab.id === activeTabId
             ? {
-                ...tab,
-                data,
-                hasUnsavedChanges: true,
-              }
+              ...tab,
+              data,
+              hasUnsavedChanges: true,
+            }
             : tab
         )
       );
@@ -192,6 +159,42 @@ export default function TabbedInvoiceEditor({ children, initialTabData }: Tabbed
     },
     [activeTabId]
   );
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+N atau Cmd+N - New tab
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        addTab();
+      }
+
+      // Ctrl+W atau Cmd+W - Close tab
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        e.preventDefault();
+        closeTab(activeTabId);
+      }
+
+      // Ctrl+Tab - Next tab
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault();
+        const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
+        const nextIndex = (currentIndex + 1) % tabs.length;
+        setActiveTabId(tabs[nextIndex].id);
+      }
+
+      // Ctrl+Shift+Tab - Previous tab
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
+        const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        setActiveTabId(tabs[prevIndex].id);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [tabs, activeTabId, addTab, closeTab]);
 
   return (
     <div className="flex flex-col h-full">

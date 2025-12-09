@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { BarChart3, FileText, Download, Calendar, Filter, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button, Card, Badge, PageTransition } from '@/components/ui';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
+import Link from 'next/link';
 
 // Dummy Trial Balance data
 const trialBalanceData = [
@@ -63,6 +65,7 @@ const incomeStatementData = {
 type ReportType = 'trial-balance' | 'balance-sheet' | 'income-statement';
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [activeReport, setActiveReport] = useState<ReportType>('trial-balance');
   const [dateRange, setDateRange] = useState({
     from: '2024-01-01',
@@ -87,6 +90,16 @@ export default function ReportsPage() {
     { id: 'balance-sheet', name: 'Balance Sheet', icon: FileText },
     { id: 'income-statement', name: 'Income Statement', icon: TrendingUp },
   ];
+
+  const handleTabClick = (id: string) => {
+    if (id === 'balance-sheet') {
+      router.push('/dashboard/reports/balance-sheet');
+    } else if (id === 'income-statement') {
+      router.push('/dashboard/reports/income-statement');
+    } else {
+      setActiveReport(id as ReportType);
+    }
+  };
 
   return (
     <PageTransition>
@@ -118,12 +131,11 @@ export default function ReportsPage() {
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveReport(tab.id as ReportType)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 btn-press ${
-                      activeReport === tab.id
-                        ? 'bg-primary-100 text-primary-700'
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
+                    onClick={() => handleTabClick(tab.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 btn-press ${activeReport === tab.id && tab.id !== 'balance-sheet' && tab.id !== 'income-statement'
+                      ? 'bg-primary-100 text-primary-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                      }`}
                   >
                     <Icon className="h-4 w-4" />
                     {tab.name}
@@ -188,6 +200,15 @@ export default function ReportsPage() {
                   <span className="text-green-800 text-sm">Debit equals Credit</span>
                 </div>
               )}
+
+              <div className="mt-6 flex justify-end">
+                <Link href="/dashboard/reports/trial-balance">
+                  <Button className="gap-2">
+                    <FileText className="h-4 w-4" />
+                    View Detailed Trial Balance
+                  </Button>
+                </Link>
+              </div>
             </Card>
           </div>
         )}
@@ -283,89 +304,6 @@ export default function ReportsPage() {
                 <div className="flex justify-between py-3 bg-purple-50 px-3 rounded-lg font-bold">
                   <span className="text-purple-800">Total Liab. + Equity</span>
                   <span className="text-purple-800">{formatCurrency(totalLiabilities + totalEquity)}</span>
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
-
-        {/* Income Statement */}
-        {activeReport === 'income-statement' && (
-          <div className="space-y-6 animate-fade-in-up">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 stagger-children">
-              <Card className="card-hover">
-                <div className="text-center">
-                  <TrendingUp className="h-8 w-8 mx-auto mb-2 text-green-600" />
-                  <p className="text-sm text-gray-600">Total Revenue</p>
-                  <p className="text-2xl font-bold text-green-600">{formatCurrency(totalRevenue)}</p>
-                </div>
-              </Card>
-              <Card className="card-hover">
-                <div className="text-center">
-                  <TrendingDown className="h-8 w-8 mx-auto mb-2 text-red-600" />
-                  <p className="text-sm text-gray-600">Total Expenses</p>
-                  <p className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</p>
-                </div>
-              </Card>
-              <Card className="card-hover">
-                <div className="text-center">
-                  <BarChart3 className="h-8 w-8 mx-auto mb-2 text-primary-600" />
-                  <p className="text-sm text-gray-600">Net Income</p>
-                  <p className={`text-2xl font-bold ${netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(netIncome)}
-                  </p>
-                </div>
-              </Card>
-            </div>
-
-            <Card title="Income Statement" description={`Period: ${dateRange.from} to ${dateRange.to}`}>
-              <div className="space-y-6">
-                {/* Revenue */}
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-3 text-lg">Revenue</h4>
-                  {incomeStatementData.revenue.map((item, index) => (
-                    <div
-                      key={item.name}
-                      className="flex justify-between py-3 border-b border-gray-100 animate-fade-in"
-                      style={{ animationDelay: `${index * 50}ms` }}
-                    >
-                      <span className="text-gray-600">{item.name}</span>
-                      <span className="font-medium text-green-600">{formatCurrency(item.amount)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between py-3 font-bold bg-green-50 px-3 rounded-lg mt-2">
-                    <span className="text-green-800">Total Revenue</span>
-                    <span className="text-green-800">{formatCurrency(totalRevenue)}</span>
-                  </div>
-                </div>
-
-                {/* Expenses */}
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-3 text-lg">Expenses</h4>
-                  {incomeStatementData.expenses.map((item, index) => (
-                    <div
-                      key={item.name}
-                      className="flex justify-between py-3 border-b border-gray-100 animate-fade-in"
-                      style={{ animationDelay: `${(index + 2) * 50}ms` }}
-                    >
-                      <span className="text-gray-600">{item.name}</span>
-                      <span className="font-medium text-red-600">({formatCurrency(item.amount)})</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between py-3 font-bold bg-red-50 px-3 rounded-lg mt-2">
-                    <span className="text-red-800">Total Expenses</span>
-                    <span className="text-red-800">({formatCurrency(totalExpenses)})</span>
-                  </div>
-                </div>
-
-                {/* Net Income */}
-                <div className={`flex justify-between py-4 font-bold text-xl px-4 rounded-lg ${
-                  netIncome >= 0 ? 'bg-green-100' : 'bg-red-100'
-                }`}>
-                  <span className={netIncome >= 0 ? 'text-green-800' : 'text-red-800'}>Net Income</span>
-                  <span className={netIncome >= 0 ? 'text-green-800' : 'text-red-800'}>
-                    {formatCurrency(netIncome)}
-                  </span>
                 </div>
               </div>
             </Card>

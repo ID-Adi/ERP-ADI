@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   Plus,
   Search,
@@ -179,7 +179,7 @@ function ListView({ onNewClick }: { onNewClick: () => void }) {
 
   // ... (rest of logic same)
 
-  const flattenAccounts = (accounts: Account[]): Account[] => {
+  const flattenAccounts = useCallback((accounts: Account[]): Account[] => {
     let result: Account[] = [];
     accounts.forEach(account => {
       result.push(account);
@@ -188,9 +188,9 @@ function ListView({ onNewClick }: { onNewClick: () => void }) {
       }
     });
     return result;
-  };
+  }, [expandedIds]);
 
-  const flattenedData = useMemo(() => flattenAccounts(accounts), [accounts, expandedIds]);
+  const flattenedData = useMemo(() => flattenAccounts(accounts), [accounts, flattenAccounts]);
 
   // ...
 

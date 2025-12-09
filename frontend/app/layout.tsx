@@ -5,7 +5,7 @@ import { ToastProvider } from "@/components/ui";
 import { TabProvider } from "@/contexts/TabContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "ERP ADI - Enterprise Resource Planning",
@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id">
-      <body className={inter.className}>
+      <body className={`${inter.variable} font-sans`}>
         <AuthProvider>
           <TabProvider>
             <ToastProvider>

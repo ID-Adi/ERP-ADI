@@ -1,0 +1,42 @@
+
+> erp-adi-backend@0.1.0 dev
+> ts-node-dev --respawn --transpile-only src/index.ts
+
+[INFO] 13:34:01 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+🚀 Server running on port 4000
+[0mGET /api/items?limit=50&page=1 [32m200[0m 1720.970 ms - 36015[0m
+[0mGET /api/items?limit=50&page=2 [32m200[0m 833.081 ms - 36015[0m
+[0mGET /api/items?limit=50&page=3 [32m200[0m 828.485 ms - 36015[0m
+[0mGET /api/items?limit=50&page=4 [32m200[0m 830.944 ms - 36015[0m
+[0mGET /api/items?limit=50&page=5 [32m200[0m 827.438 ms - 36015[0m
+[0mGET /api/items?limit=50&page=6 [32m200[0m 826.808 ms - 36015[0m
+[0mGET /api/items?limit=50&page=7 [32m200[0m 895.847 ms - 36009[0m
+[0mGET /api/items?limit=50&page=8 [32m200[0m 831.116 ms - 35965[0m
+[0mGET /api/items?limit=50&page=9 [32m200[0m 828.502 ms - 35325[0m
+[0mGET /api/items?limit=50&page=1 [32m200[0m 842.939 ms - 36015[0m
+[0mGET /api/items?limit=50&page=2 [32m200[0m 824.073 ms - 36015[0m
+[0mGET /api/items?limit=50&page=3 [32m200[0m 823.190 ms - 36015[0m
+[0mGET /api/items?limit=50&page=4 [32m200[0m 823.118 ms - 36015[0m
+[0mGET /api/items?limit=50&page=5 [32m200[0m 901.541 ms - 36015[0m
+[0mGET /api/items?limit=50&page=6 [32m200[0m 833.284 ms - 36015[0m
+[0mGET /api/items?limit=50&page=7 [32m200[0m 867.296 ms - 36009[0m
+[0mGET /api/items?limit=50&page=8 [32m200[0m 830.232 ms - 35965[0m
+[0mGET /api/items?limit=50&page=9 [32m200[0m 859.245 ms - 35325[0m
+[INFO] 13:35:27 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
+🚀 Server running on port 4000
+SERVING HARDCODED RESPONSE
+[0mGET /api/items?limit=50&page=1 [32m200[0m 1.012 ms - 223[0m
+SERVING HARDCODED RESPONSE
+[0mGET /api/items?limit=50&page=1 [32m200[0m 3.081 ms - 223[0m
+SERVING HARDCODED RESPONSE
+[0mGET /api/items?limit=50&page=1 [32m200[0m 3.269 ms - 223[0m
+[0mGET /api/customers [32m200[0m 918.420 ms - 3159[0m
+[0mGET /api/customers [32m200[0m 1210.062 ms - 3159[0m
+[INFO] 13:39:42 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
+🚀 Server running on port 4000
+[INFO] 13:39:51 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
+🚀 Server running on port 4000
+[INFO] 13:39:53 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
+🚀 Server running on port 4000
+[INFO] 13:40:06 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
+🚀 Server running on port 4000

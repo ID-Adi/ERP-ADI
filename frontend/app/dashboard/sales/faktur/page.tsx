@@ -19,9 +19,9 @@ import {
 import Button from '@/components/ui/Button';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { useTabContext } from '@/contexts/TabContext';
 import api from '@/lib/api';
+import InfiniteScroll from 'react-infinite-scroll-component';
 
 import InvoiceForm from '@/components/business/InvoiceForm';
 
@@ -52,64 +52,100 @@ export default function InvoicesPage() {
   // Ensure List tab
 
 
+  // --- Data Fetching State ---
   const [searchQuery, setSearchQuery] = useState('');
-  // Date Filter State
   const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
-
-  // Customer Filter State
   const [customerFilter, setCustomerFilter] = useState('');
-
-  // Status Filter State (Multi-select)
   const [statusFilters, setStatusFilters] = useState<string[]>([]);
 
-  const fetchInvoices = useCallback(async (page: number) => {
-    const params: any = {
-      page,
-      limit: 20
-    };
-    if (searchQuery) params.search = searchQuery;
-    if (statusFilters.length > 0) params.status = statusFilters.join(',');
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
 
-    // Add Date Filters
-    if (dateFilter.start) params.startDate = dateFilter.start;
-    if (dateFilter.end) params.endDate = dateFilter.end;
+  // Helper to deduplicate items
+  const addUniqueInvoices = (existing: any[], incoming: any[]) => {
+    const existingIds = new Set(existing.map(i => i.id));
+    const uniqueIncoming = incoming.filter(i => !existingIds.has(i.id));
+    return [...existing, ...uniqueIncoming];
+  };
 
-    // Add Customer Filter
-    if (customerFilter) params.customerId = customerFilter;
+  const fetchInvoices = useCallback(async (pageToFetch: number, resetList = false) => {
+    setLoading(true);
+    try {
+      const params: any = {
+        page: pageToFetch,
+        limit: 20
+      };
+      if (searchQuery) params.search = searchQuery;
+      if (statusFilters.length > 0) params.status = statusFilters.join(',');
 
-    const response = await api.get('/fakturs', { params });
-    return response.data;
-  }, [searchQuery, statusFilters, dateFilter, customerFilter]);
+      // Add Date Filters
+      if (dateFilter.start) params.startDate = dateFilter.start;
+      if (dateFilter.end) params.endDate = dateFilter.end;
 
-  const {
-    data: invoices,
-    loading,
-    hasMore,
-    lastElementRef,
-    reset,
-    total
-  } = useInfiniteScroll({
-    fetchData: fetchInvoices
-  });
+      // Add Customer Filter
+      if (customerFilter) params.customerId = customerFilter;
+
+      const response = await api.get('/fakturs', { params });
+      const newData = response.data.data || [];
+      const meta = response.data.meta || {};
+
+      if (resetList) {
+        setInvoices(newData);
+      } else {
+        setInvoices(prev => addUniqueInvoices(prev, newData));
+      }
+
+      setTotal(meta.total || 0);
+
+      if (meta.total) {
+        setHasMore((resetList ? newData.length : invoices.length + newData.length) < meta.total);
+      } else {
+        setHasMore(newData.length > 0);
+      }
+
+    } catch (error) {
+      console.error('Error fetching invoices:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery, statusFilters, dateFilter, customerFilter, invoices.length]);
+
+  // Initial Fetch
+  useEffect(() => {
+    setPage(1);
+    fetchInvoices(1, true);
+  }, [fetchInvoices]);
+
+  const fetchNextPage = () => {
+    if (!loading && hasMore) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchInvoices(nextPage, false);
+    }
+  };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
-    reset();
   };
 
   const handleStatusFilterChange = (selectedStatuses: string[]) => {
     setStatusFilters(selectedStatuses);
-    reset();
   };
 
   const handleDateFilterChange = (start: string, end: string) => {
     setDateFilter({ start, end });
-    reset();
   };
 
   const handleCustomerFilterChange = (customerId: string) => {
     setCustomerFilter(customerId);
-    reset();
+  };
+
+  const handleRefresh = () => {
+    setPage(1);
+    fetchInvoices(1, true);
   };
 
   const handleRowClick = (invoice: any) => {
@@ -134,7 +170,7 @@ export default function InvoicesPage() {
     if (activeTabId) {
       closeDataTab(featureId, activeTabId);
     }
-    reset(); // Refresh list
+    handleRefresh();
   };
 
   // --- Form View Wrapper ---
@@ -150,8 +186,15 @@ export default function InvoicesPage() {
   useEffect(() => {
     if (isFormView && editId && !activeDataTab?.data?.lines) {
       // Fetch only if we don't have cached full data (checking 'lines' as proxy for full load)
+      // Check if we already have the correct data in editData to avoid re-fetch if just toggling view (optional, but good)
+      if (editData && editData.id === editId) {
+        return; // Already loaded matching data
+      }
+
       const loadInvoice = async () => {
         setFormLoading(true);
+        // Clear previous data to prevent flashing/poisoning
+        setEditData(null);
         try {
           const res = await api.get(`/fakturs/${editId}`);
           setEditData(transformInvoiceData(res.data));
@@ -163,11 +206,13 @@ export default function InvoicesPage() {
       };
       loadInvoice();
     } else if (isNew) {
-      setEditData(null); // Reset for new
+      // Ensure we don't hold onto old edit data
+      if (editData !== null) setEditData(null);
     } else if (cachedData) {
-      setEditData(cachedData);
+      // If we have cache, we don't need editData (or can sync it), but cache takes precedence in logic below
     }
-  }, [isFormView, editId, isNew, cachedData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFormView, editId, isNew, activeDataTab?.data?.lines]); // Removed cachedData dependency to avoid loops, used deep check
 
   const defaultNewData = {
     vendorCode: '',
@@ -177,12 +222,32 @@ export default function InvoicesPage() {
     lines: [],
   };
 
-  const formDataToRender = cachedData || editData || defaultNewData;
+  // Safe Data Resolution
+  // 1. Cached Data (User inputs in progress) - Highest Priority
+  // 2. Edit Data (Fetched from API) - Only if IDs match!
+  // 3. Default (If New)
+  let formDataToRender = null;
+  let isDataReady = false;
+
+  if (cachedData && Object.keys(cachedData).length > 0) {
+    formDataToRender = cachedData;
+    isDataReady = true;
+  } else if (isNew) {
+    formDataToRender = defaultNewData;
+    isDataReady = true;
+  } else if (editId && editData && editData.id === editId) {
+    formDataToRender = editData;
+    isDataReady = true;
+  }
+
+  // Debug log to verify isolation (can be removed later)
+  // console.log('Render Check:', { tab: activeTabId, editId, isNew, hasCache: !!cachedData, hasEditData: !!editData, isReady: isDataReady });
 
   // We use CSS toggling to keep List View alive (preserving scroll)
   // while showing Form View on top or replacing it visually.
   // Actually, standard practice for simple SPA is just Conditional, but user asked about Refresh.
   // To keep scroll, we must keep the Table in DOM and hide it.
+
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-surface-200 overflow-hidden relative">
@@ -194,13 +259,17 @@ export default function InvoicesPage() {
       )}>
         {isFormView && ( // We can still conditionally render content inside, just keeping container logic clean
           <>
-            {editId && formLoading && !cachedData ? (
-              <div className="flex h-full items-center justify-center"><RefreshCw className="animate-spin h-6 w-6 text-primary-600" /></div>
+            {(!isDataReady || formLoading) ? (
+              <div className="flex h-full items-center justify-center gap-2 text-warmgray-500">
+                <RefreshCw className="animate-spin h-6 w-6 text-primary-600" />
+                <span>Memuat data...</span>
+              </div>
             ) : (
               <InvoiceForm
-                key={activeTabId || 'form'}
+                key={activeTabId || 'form'} // Key is CRITICAL here to force remount on tab switch
                 initialData={formDataToRender}
                 onDataChange={(data) => {
+                  // Double check we are updating the active tab to avoid race conditions
                   if (activeTabId) updateDataTabData(featureId, activeTabId, data);
                 }}
                 onSave={() => {
@@ -257,7 +326,7 @@ export default function InvoicesPage() {
           </button>
 
           <button
-            onClick={() => reset()}
+            onClick={() => handleRefresh()}
             className="flex items-center justify-center w-8 h-8 bg-white border border-surface-300 hover:bg-surface-100 text-warmgray-600 rounded-md shadow-sm transition-colors"
           >
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
@@ -295,62 +364,75 @@ export default function InvoicesPage() {
       </div>
 
       {/* 4. Dense Data Table */}
-      <div className="flex-1 overflow-auto relative">
-        <table className="w-full text-sm text-left">
-          <thead className="text-xs text-white uppercase bg-warmgray-800 sticky top-0 z-10 w-full">
-            <tr>
-              <th scope="col" className="px-4 py-2.5 font-semibold w-12 text-center">
-                &nbsp;
-              </th>
-              <Th>Number #</Th>
-              <Th>Date</Th>
-              <Th>Customer</Th>
-              <Th>Description</Th>
-              <Th>Status</Th>
-              <Th>Sales Person</Th>
-              <Th className="text-right">Total</Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-surface-200">
-            {invoices.map((invoice: any, index: number) => {
-              const badge = getStatusBadge(invoice.status);
-              return (
-                <tr
-                  key={`${invoice.id}-${index}`}
-                  className={cn(
-                    "hover:bg-primary-50 transition-colors cursor-pointer group",
-                    index % 2 === 0 ? 'bg-white' : 'bg-surface-50/50'
-                  )}
-                  onClick={() => handleRowClick(invoice)}
-                >
-                  <td className="px-4 py-2 text-center text-warmgray-400">
-                    <div className="w-2 h-2 rounded-full bg-transparent group-hover:bg-primary-500" />
+      <div id="scrollableDiv" className="flex-1 overflow-auto relative">
+        <InfiniteScroll
+          dataLength={invoices.length}
+          next={fetchNextPage}
+          hasMore={hasMore}
+          loader={
+            <div className="flex justify-center p-4">
+              <div className="h-6 w-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          }
+          scrollableTarget="scrollableDiv"
+        >
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-white uppercase bg-warmgray-800 sticky top-0 z-10 w-full">
+              <tr>
+                <th scope="col" className="px-4 py-2.5 font-semibold w-12 text-center">
+                  &nbsp;
+                </th>
+                <Th>Number #</Th>
+                <Th>Date</Th>
+                <Th>Customer</Th>
+                <Th>Description</Th>
+                <Th>Status</Th>
+                <Th>Sales Person</Th>
+                <Th className="text-right">Total</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-surface-200">
+              {invoices.map((invoice: any, index: number) => {
+                const badge = getStatusBadge(invoice.status);
+                return (
+                  <tr
+                    key={`${invoice.id}-${index}`}
+                    className={cn(
+                      "hover:bg-primary-50 transition-colors cursor-pointer group",
+                      index % 2 === 0 ? 'bg-white' : 'bg-surface-50/50'
+                    )}
+                    onClick={() => handleRowClick(invoice)}
+                  >
+                    <td className="px-4 py-2 text-center text-warmgray-400">
+                      <div className="w-2 h-2 rounded-full bg-transparent group-hover:bg-primary-500" />
+                    </td>
+                    <td className="px-4 py-2 font-medium text-warmgray-900">{invoice.fakturNumber}</td>
+                    <td className="px-4 py-2 text-warmgray-600 whitespace-nowrap">{formatDate(invoice.fakturDate)}</td>
+                    <td className="px-4 py-2 text-warmgray-900 font-medium">{invoice.customerName}</td>
+                    <td className="px-4 py-2 text-warmgray-600 truncate max-w-[200px]">{invoice.description}</td>
+                    <td className="px-4 py-2">
+                      <span className={cn("font-medium text-xs px-2 py-0.5 rounded-full inline-block", badge.className)}>
+                        {badge.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-warmgray-600">{invoice.salesPerson}</td>
+                    <td className="px-4 py-2 text-right font-bold text-warmgray-900">{formatCurrency(invoice.total)}</td>
+                  </tr>
+                )
+              })}
+              {invoices.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center text-warmgray-500">
+                    <div className="flex flex-col items-center justify-center">
+                      <RefreshCw className="h-8 w-8 mb-2 text-warmgray-300" />
+                      <p>Tidak ada data faktur</p>
+                    </div>
                   </td>
-                  <td className="px-4 py-2 font-medium text-warmgray-900">{invoice.fakturNumber}</td>
-                  <td className="px-4 py-2 text-warmgray-600 whitespace-nowrap">{formatDate(invoice.fakturDate)}</td>
-                  <td className="px-4 py-2 text-warmgray-900 font-medium">{invoice.customerName}</td>
-                  <td className="px-4 py-2 text-warmgray-600 truncate max-w-[200px]">{invoice.description}</td>
-                  <td className="px-4 py-2">
-                    <span className={cn("font-medium text-xs px-2 py-0.5 rounded-full inline-block", badge.className)}>
-                      {badge.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-warmgray-600">{invoice.salesPerson}</td>
-                  <td className="px-4 py-2 text-right font-bold text-warmgray-900">{formatCurrency(invoice.total)}</td>
                 </tr>
-              )
-            })}
-
-            {/* Loading Sentinel */}
-            <tr ref={lastElementRef}>
-              <td colSpan={8} className="px-4 py-8 text-center text-warmgray-500">
-                {loading && <div className="flex items-center justify-center gap-2"><RefreshCw className="h-4 w-4 animate-spin" /> Loading more invoices...</div>}
-                {!hasMore && invoices.length > 0 && <span className="text-xs">No more invoices</span>}
-                {!loading && invoices.length === 0 && "No invoices available"}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </InfiniteScroll>
       </div>
     </div>
   );
@@ -564,7 +646,7 @@ function CustomerFilterDropdown({
         .catch(err => console.error(err))
         .finally(() => setLoading(false));
     }
-  }, [open]);
+  }, [open, customers.length]);
 
   // Close on click outside & Positioning (Reused logic)
   useEffect(() => {

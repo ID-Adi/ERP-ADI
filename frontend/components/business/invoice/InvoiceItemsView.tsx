@@ -249,7 +249,7 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                         ) : filteredItems.length === 0 ? (
                             <tr>
                                 <td colSpan={9} className="py-12 text-center text-warmgray-400 italic">
-                                    Tidak ada barang yang cocok dengan pencarian "{tableSearch}".
+                                    Tidak ada barang yang cocok dengan pencarian &quot;{tableSearch}&quot;.
                                 </td>
                             </tr>
                         ) : (

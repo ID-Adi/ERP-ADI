@@ -75,7 +75,12 @@ export default function InvoiceForm({
   const [formData, setFormData] = useState({
     ...initialData,
     currency: initialData.currency || 'IDR',
-    fakturNumber: initialData.fakturNumber || 'Auto-Generated'
+    fakturNumber: initialData.fakturNumber || 'Auto-Generated',
+    // New Fields
+    paymentTerms: (initialData as any).paymentTerms || '',
+    taxInclusive: (initialData as any).taxInclusive ?? true, // Default to true (Tax Inclusive)
+    shippingDate: (initialData as any).shippingDate || new Date().toISOString().split('T')[0],
+    dueDate: initialData.dueDate || new Date().toISOString().split('T')[0] // Default to Now
   });
 
   const [lines, setLines] = useState<LineItem[]>(initialData.lines || []);
@@ -107,9 +112,32 @@ export default function InvoiceForm({
     // Recalculate Totals
     const subtotal = lines.reduce((sum, line) => sum + (line.quantity * line.unitPrice), 0);
     const itemDiscounts = lines.reduce((sum, line) => sum + line.discountAmount, 0);
-    const taxableBase = subtotal - itemDiscounts; // Simplified tax base
-    const tax = lines.reduce((sum, line) => sum + line.taxAmount, 0) || (taxableBase * 0.11); // Fallback to 11% if line tax is 0 or not calc'd
-    const grandTotal = subtotal - itemDiscounts + tax;
+    const taxableBase = subtotal - itemDiscounts;
+
+    let tax = 0;
+    let grandTotal = 0;
+
+    if ((formData as any).taxInclusive) {
+      // Tax Inclusive Logic:
+      // The price entered IS the final price.
+      // Grand Total = Subtotal - Discounts.
+      // Tax is calculated backwards from the amount.
+      grandTotal = taxableBase;
+
+      // Calculate tax component for display (assuming 11% VAT included)
+      // Amount = Base + (Base * 0.11) = Base * 1.11
+      // Base = Amount / 1.11
+      // Tax = Amount - Base
+      const base = taxableBase / 1.11;
+      tax = taxableBase - base;
+    } else {
+      // Tax Exclusive Logic:
+      // Tax is added on top of the taxable base.
+      // We try to use line-item tax amounts if available, otherwise fallback to flat 11%
+      const lineTaxSum = lines.reduce((sum, line) => sum + line.taxAmount, 0);
+      tax = lineTaxSum > 0 ? lineTaxSum : (taxableBase * 0.11);
+      grandTotal = taxableBase + tax;
+    }
 
     setTotals({
       subtotal,
@@ -121,7 +149,7 @@ export default function InvoiceForm({
 
     const newData = { ...formData, lines };
     onDataChange(newData);
-  }, [lines, formData.vendorCode, formData.fakturDate, formData.dueDate, formData.memo, formData.currency]);
+  }, [lines, formData, onDataChange]);
 
   // Handle Manual Faktur Toggle
   const handleManualFakturToggle = () => {
@@ -156,7 +184,7 @@ export default function InvoiceForm({
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, statusOverride?: string) => {
     e.preventDefault();
     setIsLoading(true);
 
@@ -167,8 +195,8 @@ export default function InvoiceForm({
       if (!selectedCustomer) {
         addToast({
           type: 'error',
-          title: 'Validation Error',
-          message: 'Please select a customer before saving.',
+          title: 'Kesalahan Validasi',
+          message: 'Harap pilih pelanggan sebelum menyimpan.',
         });
         setIsLoading(false);
         return;
@@ -177,8 +205,18 @@ export default function InvoiceForm({
       if (lines.length === 0) {
         addToast({
           type: 'error',
-          title: 'Validation Error',
-          message: 'Please add at least one item before saving.',
+          title: 'Kesalahan Validasi',
+          message: 'Harap tambahkan setidaknya satu barang sebelum menyimpan.',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (!(formData as any).paymentTerms) {
+        addToast({
+          type: 'error',
+          title: 'Kesalahan Validasi',
+          message: 'Syarat Pembayaran wajib diisi.',
         });
         setIsLoading(false);
         return;
@@ -190,6 +228,9 @@ export default function InvoiceForm({
         fakturNumber: isManualFaktur ? formData.fakturNumber : undefined, // Let backend generate if not manual
         fakturDate: formData.fakturDate,
         dueDate: formData.dueDate || null,
+        paymentTerms: (formData as any).paymentTerms, // Include payment terms
+        shippingDate: (formData as any).shippingDate,
+        taxInclusive: (formData as any).taxInclusive,
         customerId: selectedCustomer.id,
         currency: formData.currency || 'IDR',
         subtotal: totals.subtotal,
@@ -485,7 +526,7 @@ export default function InvoiceForm({
           {/* Grand Total Display */}
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-warmgray-600">Sub Total</span>
+              <span className="text-sm font-semibold text-warmgray-600">Subtotal</span>
               <div className="flex flex-col items-end">
                 <span className="text-sm font-bold text-warmgray-900">{formatCurrency(totals.subtotal)}</span>
               </div>
@@ -494,7 +535,7 @@ export default function InvoiceForm({
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
                 <span className="text-sm font-semibold text-warmgray-600">Diskon</span>
-                <span className="bg-blue-50 text-blue-600 text-[10px] px-1 rounded border border-blue-100">%</span>
+                <span className="bg-primary-50 text-primary-600 text-[10px] px-1 rounded border border-primary-100">%</span>
               </div>
               <div className="flex items-center border border-warmgray-300 rounded bg-white w-32 overflow-hidden">
                 <span className="bg-warmgray-50 px-2 py-1 text-xs text-warmgray-500 border-r border-warmgray-300">Rp</span>
@@ -572,7 +613,7 @@ function SidebarButton({ active, onClick, icon: Icon, label }: { active: boolean
         className={cn(
           "w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200",
           active
-            ? "bg-blue-100 text-blue-600 shadow-sm ring-1 ring-blue-200"
+            ? "bg-primary-50 text-primary-600 shadow-sm ring-1 ring-primary-200"
             : "text-warmgray-400 hover:bg-warmgray-50 hover:text-warmgray-600"
         )}
       >

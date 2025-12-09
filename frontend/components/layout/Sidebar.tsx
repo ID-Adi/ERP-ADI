@@ -125,7 +125,7 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
               {/* Menu Content */}
               <div className={cn(
                 "absolute left-full top-0 ml-3 bg-white rounded-xl shadow-xl border border-surface-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-left",
-                item.children && item.children.length > 8 ? "w-96" : "w-48"
+                "w-max"
               )}>
                 <div className="px-4 py-3 border-b border-surface-100 bg-surface-50">
                   <span className="text-sm font-semibold text-warmgray-900">{item.title}</span>
@@ -149,7 +149,7 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
                       )}
                     >
                       <child.icon className="h-4 w-4 opacity-70" />
-                      <span className="truncate">{child.title}</span>
+                      <span className="whitespace-nowrap">{child.title}</span>
                     </button>
                   ))}
                 </div>

@@ -20,7 +20,7 @@ export default function NewInvoicePage() {
         href: '/dashboard/sales/faktur/new',
       });
     }
-  }, [openDataTab, activeFeatureTabId]);
+  }, [openDataTab, activeFeatureTabId, featureId, tabId]);
 
   // Retrieve cached data if available
   const activeTab = getActiveDataTab();

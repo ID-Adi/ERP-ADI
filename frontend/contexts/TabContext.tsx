@@ -170,34 +170,46 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
     // Close a feature tab
     const closeFeatureTab = useCallback((id: string) => {
-        let nextPath = '/dashboard';
+        // Calculate next state *before* updating
+        const isClosingActive = activeFeatureTabId === id;
+        let nextTabId = activeFeatureTabId;
+        let nextPath = '';
 
-        setFeatureTabs(prev => {
-            const newTabs = prev.filter(t => t.id !== id);
-            return newTabs;
-        });
+        const currentIndex = featureTabs.findIndex(t => t.id === id);
+        const remainingTabs = featureTabs.filter(t => t.id !== id);
 
-        setActiveFeatureTabIdState(prev => {
-            if (prev === id) {
-                const remaining = featureTabs.filter(t => t.id !== id);
-                if (remaining.length > 0) {
-                    const nextTab = remaining[remaining.length - 1];
-                    nextPath = nextTab.href;
-                    return nextTab.id;
+        if (isClosingActive) {
+            if (remainingTabs.length > 0) {
+                // Better Logic: Go to the nearest LEFT tab (previous neighbor)
+                // If closing index 1, try to go to index 0.
+                // If closing index 0, go to new index 0 (which was 1).
+                let nextIndex = currentIndex - 1;
+                if (nextIndex < 0) nextIndex = 0;
+
+                // Safety clamp
+                if (nextIndex >= remainingTabs.length) {
+                    nextIndex = remainingTabs.length - 1;
                 }
-                nextPath = '/dashboard';
-                return null;
-            }
-            // If we are not closing the active tab, we don't need to navigate
-            // But we need to signal that we shouldn't navigate
-            nextPath = '';
-            return prev;
-        });
 
-        if (nextPath) {
-            router.push(nextPath);
+                const nextTab = remainingTabs[nextIndex];
+                nextTabId = nextTab.id;
+                nextPath = nextTab.href;
+            } else {
+                nextTabId = null;
+                nextPath = '/dashboard';
+            }
         }
-    }, [featureTabs, router]);
+
+        // Apply State Updates
+        setFeatureTabs(remainingTabs);
+
+        if (isClosingActive) {
+            setActiveFeatureTabIdState(nextTabId);
+            if (nextPath) {
+                router.push(nextPath);
+            }
+        }
+    }, [featureTabs, activeFeatureTabId, router]);
 
     // Set active feature tab
     const setActiveFeatureTab = useCallback((id: string) => {
@@ -224,23 +236,41 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
     // Close a data tab
     const closeDataTab = useCallback((featureId: string, tabId: string) => {
-        setFeatureTabs(prev => prev.map(feature => {
-            if (feature.id !== featureId) return feature;
+        const feature = featureTabs.find(f => f.id === featureId);
+        if (!feature) return;
 
-            const newDataTabs = feature.dataTabs.filter(t => t.id !== tabId);
-            let newActiveId = feature.activeDataTabId;
+        const isClosingActive = feature.activeDataTabId === tabId;
+        const newDataTabs = feature.dataTabs.filter(t => t.id !== tabId);
+        let newActiveId = feature.activeDataTabId;
+        let nextPath = '';
 
-            if (feature.activeDataTabId === tabId) {
-                newActiveId = newDataTabs.length > 0 ? newDataTabs[newDataTabs.length - 1].id : null;
+        if (isClosingActive) {
+            if (newDataTabs.length > 0) {
+                const nextTab = newDataTabs[newDataTabs.length - 1];
+                newActiveId = nextTab.id;
+                nextPath = nextTab.href;
+            } else {
+                newActiveId = null;
+                // Fallback to feature href if all data tabs closed
+                nextPath = "/dashboard"; // Or feature.href if available? Feature href usually opens default data tab.
+                // Let's stick to dashboard or current feature href without list?
+                nextPath = feature.href;
             }
+        }
 
+        setFeatureTabs(prev => prev.map(f => {
+            if (f.id !== featureId) return f;
             return {
-                ...feature,
+                ...f,
                 dataTabs: newDataTabs,
                 activeDataTabId: newActiveId,
             };
         }));
-    }, []);
+
+        if (isClosingActive && nextPath) {
+            router.push(nextPath);
+        }
+    }, [featureTabs, router]);
 
     // Set active data tab
     const setActiveDataTab = useCallback((featureId: string, tabId: string) => {

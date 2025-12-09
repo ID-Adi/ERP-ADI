@@ -28,6 +28,7 @@ model Company {
   items       Item[]
   salesOrders SalesOrder[]
   fakturs     Faktur[]
+  salesReceipts SalesReceipt[]
   warehouses  Warehouse[]
   itemCategories ItemCategory[]
   units          Unit[]
@@ -125,6 +126,7 @@ model Customer {
   company       Company        @relation(fields: [companyId], references: [id])
   salesOrders   SalesOrder[]
   fakturs       Faktur[]
+  salesReceipts SalesReceipt[]
   itemSuppliers ItemSupplier[] // Kept for compatibility, though name implies Supplier
 
   // Account Relations
@@ -432,6 +434,7 @@ model Faktur {
   company       Company       @relation(fields: [companyId], references: [id])
   salesOrder    SalesOrder?   @relation(fields: [salesOrderId], references: [id])
   lines         FakturLine[]
+  receiptLines  SalesReceiptLine[]
 
   @@unique([companyId, fakturNumber])
 }
@@ -470,6 +473,56 @@ enum FakturStatus {
   CANCELLED
 }
 
+model SalesReceipt {
+  id              String    @id @default(uuid())
+  companyId       String
+  receiptNumber   String    
+  receiptDate     DateTime
+  
+  customerId      String
+  customer        Customer  @relation(fields: [customerId], references: [id])
+  
+  // Payment Details
+  bankAccountId   String
+  bankAccount     Account   @relation(fields: [bankAccountId], references: [id])
+  
+  paymentMethod   String    @default("TRANSFER") // CASH, TRANSFER, CEK/GIRO
+  
+  // Amount
+  amount          Decimal   @db.Decimal(15, 2) // Nilai Pembayaran
+  
+  notes           String?
+  status          ReceiptStatus @default(DRAFT)
+  
+  // Audit
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  company         Company   @relation(fields: [companyId], references: [id])
+  lines           SalesReceiptLine[]
+
+  @@unique([companyId, receiptNumber])
+}
+
+model SalesReceiptLine {
+  id              String        @id @default(uuid())
+  salesReceiptId  String
+  
+  fakturId        String?
+  faktur          Faktur?       @relation(fields: [fakturId], references: [id])
+  
+  amount          Decimal       @db.Decimal(15, 2) // Alokasi ke faktur ini
+  
+  salesReceipt    SalesReceipt  @relation(fields: [salesReceiptId], references: [id], onDelete: Cascade)
+}
+
+enum ReceiptStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
 // --- ACCOUNTING MODULE ---
 
 model Account {
@@ -500,6 +553,7 @@ model Account {
   itemAccounts    ItemAccount[]
   itemTaxes       ItemTax[]
   hppCategories   ItemCategory[] @relation("CategoryHPP")
+  salesReceipts   SalesReceipt[]
   
   // Snapshot Saldo
   balances    AccountBalance[]

@@ -70,7 +70,7 @@ export default function ItemsPerWarehousePage() {
     }, []);
 
     // Fetch stocks function
-    const fetchStocks = async () => {
+    const fetchStocks = useCallback(async () => {
         setLoading(true);
         try {
             const params: any = { limit: 50 }; // Basic limit for now
@@ -81,10 +81,6 @@ export default function ItemsPerWarehousePage() {
 
             if (mode === 'WAREHOUSE' && selectedWarehouseId) {
                 params.warehouseId = selectedWarehouseId;
-                // Also allow searching items WITHIN that warehouse if needed, 
-                // but per requirement: "Jika value Gudang dipilih maka search akan menampilkan gudang"
-                // This implies the standard search bar BECOMES a warehouse selector or search.
-                // For 'WAREHOUSE' mode, we filter by warehouseId.
             }
 
             const res = await api.get('/items/stocks', { params });
@@ -95,30 +91,21 @@ export default function ItemsPerWarehousePage() {
         } finally {
             setLoading(false);
         }
-    };
-
-    // Debounced search for Item mode
-    const debouncedFetch = useCallback(debounce(() => {
-        fetchStocks();
-    }, 500), [mode, itemSearchQuery, selectedWarehouseId]);
+    }, [mode, itemSearchQuery, selectedWarehouseId, addToast]);
 
     // Effect to trigger fetch when dependencies change
     useEffect(() => {
-        // If mode is WAREHOUSE, only fetch if a warehouse is actually selected (or show all if that's the desired UX, but usually empty initially feels cleaner or show all)
-        // Let's load initially or when search changes.
-        // However, if mode is WAREHOUSE and no warehouse selected, maybe separate behavior?
-        // Let's just fetch. API handles optional filters.
-        fetchStocks();
-    }, [mode, selectedWarehouseId]); // Removed itemSearchQuery from here to use debounced version for text input
-
-    // Separate effect for text input to debounce
-    useEffect(() => {
+        // If searching items, debounce the fetch
         if (mode === 'ITEM') {
-            debouncedFetch();
+            const timer = setTimeout(() => {
+                fetchStocks();
+            }, 500);
+            return () => clearTimeout(timer);
+        } else {
+            // Immediate fetch for warehouse mode changes
+            fetchStocks();
         }
-        // Cancel debounce on unmount
-        return () => debouncedFetch.cancel();
-    }, [itemSearchQuery, debouncedFetch, mode]);
+    }, [fetchStocks, mode]);
 
 
     const handleRowClick = (stock: StockItem) => {

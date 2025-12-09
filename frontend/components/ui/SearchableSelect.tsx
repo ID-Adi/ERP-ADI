@@ -68,9 +68,9 @@ const SearchableSelect = forwardRef<HTMLDivElement, SearchableSelectProps>(
                     <div
                         onClick={() => !disabled && setIsOpen(!isOpen)}
                         className={cn(
-                            "flex items-center justify-between w-full px-3 py-2 border rounded-lg bg-white cursor-pointer transition-colors",
+                            "flex items-center justify-between w-full px-3 py-1.5 text-sm border rounded shadow-sm bg-white cursor-pointer transition-colors",
                             "hover:bg-gray-50",
-                            isOpen ? "ring-2 ring-primary-500 border-transparent" : "border-gray-300",
+                            isOpen ? "ring-1 ring-primary-500 border-primary-500" : "border-surface-300",
                             error ? "border-danger-500" : "",
                             disabled ? "bg-gray-100 cursor-not-allowed opacity-75" : ""
                         )}
