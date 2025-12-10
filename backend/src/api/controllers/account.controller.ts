@@ -14,15 +14,12 @@ router.get('/', async (req: Request, res: Response) => {
         const where: any = {};
 
         if (type && type !== 'Semua') {
-            // Map frontend display strings to Enum if necessary, 
-            // but ideally frontend sends matching Enum or we do mapping here.
-            // For now, let's assume loose matching or exact enum match.
-            // If the query is "Kas & Bank", we might need to map it to valid enums.
-            // But usually APIs filter by exact Enum Key.
-            // Let's assume frontend sends the Enum Key or we assume no filter for now if complex.
-            // Actually, the frontend sends "Tipe Akun: Semua" or specific types. 
-            // The frontend list has human readable names. I might need a mapper.
-            // For now, I will skip type filter to avoid complexity until frontend is aligned.
+            if (type.includes(',')) {
+                const types = type.split(',').map(t => t.trim()) as AccountType[];
+                where.type = { in: types };
+            } else {
+                where.type = type as AccountType;
+            }
         }
 
         if (search) {
