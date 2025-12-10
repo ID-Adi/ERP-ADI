@@ -7,7 +7,23 @@ import { cn } from '@/lib/utils';
 import { confirmAction } from '@/lib/swal';
 export function FeatureTabBar() {
     const router = useRouter();
-    const { featureTabs, activeFeatureTabId, setActiveFeatureTab, closeFeatureTab } = useTabContext();
+    const { featureTabs, activeFeatureTabId, setActiveFeatureTab, closeFeatureTab, isInitialized } = useTabContext();
+
+    if (!isInitialized) {
+        return (
+            <div className="flex items-center bg-warmgray-800 border-b border-warmgray-700 overflow-x-auto h-[38px]">
+                {[1, 2, 3].map((i) => (
+                    <div
+                        key={i}
+                        className="flex items-center gap-2 px-4 py-2 border-r border-warmgray-700 min-w-[120px]"
+                    >
+                        <div className="h-4 w-20 bg-warmgray-700/50 rounded animate-pulse" />
+                        <div className="h-3.5 w-3.5 bg-warmgray-700/50 rounded animate-pulse ml-auto" />
+                    </div>
+                ))}
+            </div>
+        );
+    }
 
     if (featureTabs.length === 0) return null;
 
@@ -62,8 +78,24 @@ export function DataTabBar() {
         activeFeatureTabId,
         getActiveFeatureTab,
         setActiveDataTab,
-        closeDataTab
+        closeDataTab,
+        isInitialized
     } = useTabContext();
+
+    if (!isInitialized) {
+        return (
+            <div className="flex items-center bg-surface-100 border-b border-surface-300 overflow-x-auto h-[33px]">
+                {[1].map((i) => (
+                    <div
+                        key={i}
+                        className="flex items-center gap-2 px-3 py-1.5 border-r border-surface-300 min-w-[80px]"
+                    >
+                        <div className="h-3 w-12 bg-surface-200 rounded animate-pulse" />
+                    </div>
+                ))}
+            </div>
+        );
+    }
 
     const activeFeature = getActiveFeatureTab();
 

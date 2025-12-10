@@ -41,6 +41,7 @@ interface TabContextType {
     // Helpers
     getActiveFeatureTab: () => FeatureTab | undefined;
     getActiveDataTab: () => DataTab | undefined;
+    isInitialized: boolean;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
@@ -48,6 +49,7 @@ const TabContext = createContext<TabContextType | undefined>(undefined);
 export function TabProvider({ children }: { children: ReactNode }) {
     const [featureTabs, setFeatureTabs] = useState<FeatureTab[]>([]);
     const [activeFeatureTabId, setActiveFeatureTabIdState] = useState<string | null>(null);
+    const [isInitialized, setIsInitialized] = useState(false);
     const pathname = usePathname();
     const router = useRouter();
 
@@ -144,6 +146,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         if (savedActiveId) {
             setActiveFeatureTabIdState(savedActiveId);
         }
+        setIsInitialized(true);
     }, []);
 
     // Save to LocalStorage on change
@@ -334,6 +337,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
             markDataTabDirty,
             getActiveFeatureTab,
             getActiveDataTab,
+            isInitialized,
         }}>
             {children}
         </TabContext.Provider>

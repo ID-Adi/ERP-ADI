@@ -75,7 +75,8 @@ export default function InvoiceForm({
   const [activeView, setActiveView] = useState<ViewType>('items');
 
   // State for manual invoice number toggle
-  const [isManualFaktur, setIsManualFaktur] = useState(false);
+  // For existing invoices (edit mode), default to true to preserve the existing number
+  const [isManualFaktur, setIsManualFaktur] = useState(!!initialData.id || !!initialData.fakturNumber);
 
 
 
@@ -509,7 +510,7 @@ export default function InvoiceForm({
 
       const payload = {
         companyId: 'default-company',
-        fakturNumber: formData.fakturNumber || undefined,
+        fakturNumber: isManualFaktur ? formData.fakturNumber : undefined, // Respect toggle for drafts too
         fakturDate: formData.fakturDate,
         dueDate: formData.dueDate || null,
         customerId: selectedCustomer?.id || undefined,

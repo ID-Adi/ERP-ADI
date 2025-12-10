@@ -31,7 +31,7 @@ export default function EditInvoicePage() {
       currency: apiData.currency || 'IDR',
       id: apiData.id,
       salespersonId: apiData.salespersonId || '', // Include invoice-level salesperson
-      paymentTerms: apiData.paymentTerms || '',
+      paymentTerms: apiData.paymentTermId || apiData.paymentTerms || '', // Fallback to paymentTerms col (legacy ID)
       taxInclusive: apiData.taxInclusive ?? true,
       shippingDate: apiData.shippingDate?.split('T')[0] || '',
       lines: apiData.lines?.map((line: any) => ({
@@ -96,8 +96,15 @@ export default function EditInvoicePage() {
     ? activeTab.data
     : null;
 
-  // Use cached data if available to prevent overwrite/loading, otherwise API data
-  const displayData = cachedData || invoiceData;
+  // Use cached data if available, but backfill from invoiceData if cache is missing fields (stale cache fix)
+  const displayData = cachedData
+    ? {
+      ...cachedData,
+      // Ensure critical fields are populated from fresh API data if missing in cache
+      paymentTerms: cachedData.paymentTerms || invoiceData?.paymentTerms || '',
+      paymentTermId: cachedData.paymentTermId || invoiceData?.paymentTermId || ''
+    }
+    : invoiceData;
 
   if (loading && !displayData) {
     return (

@@ -81,6 +81,11 @@ router.get('/', async (req: Request, res: Response) => {
                     select: {
                         name: true
                     }
+                },
+                salesperson: {
+                    select: {
+                        name: true
+                    }
                 }
             }
         });
@@ -90,9 +95,9 @@ router.get('/', async (req: Request, res: Response) => {
             id: faktur.id,
             fakturNumber: faktur.fakturNumber,
             customerName: faktur.customer.name,
-            description: faktur.notes || faktur.customer.name,
+            description: faktur.notes || "", // User wants empty string if no notes
             fakturDate: faktur.fakturDate.toISOString().split('T')[0],
-            salesPerson: faktur.createdBy || 'Unknown',
+            salesPerson: faktur.salesperson?.name || '-', // Use actual salesperson name
             total: Number(faktur.totalAmount),
             totalAmount: Number(faktur.totalAmount),
             amountPaid: Number(faktur.amountPaid),

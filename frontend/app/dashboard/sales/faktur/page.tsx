@@ -450,6 +450,7 @@ const transformInvoiceData = (apiData: any) => {
     memo: apiData.notes || '',
     currency: apiData.currency || 'IDR',
     id: apiData.id,
+    salespersonId: apiData.salespersonId || '', // Map Salesperson
     lines: apiData.lines?.map((line: any) => ({
       id: line.id,
       itemId: line.itemId,
@@ -463,7 +464,11 @@ const transformInvoiceData = (apiData: any) => {
       taxPercent: 11,
       lineAmount: Number(line.amount),
       taxAmount: 0,
-      totalAmount: Number(line.amount)
+      totalAmount: Number(line.amount),
+      warehouseId: line.warehouseId, // Map Warehouse ID
+      warehouseName: line.warehouse?.name, // Map Warehouse Name for display
+      salespersonId: apiData.salespersonId, // Line inherits invoice salesperson if not specific
+      salespersonName: apiData.salesperson?.name // Map Salesperson Name
     })) || [],
   };
 };

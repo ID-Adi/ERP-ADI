@@ -18,10 +18,12 @@ import {
     Package,
     Save,
     Paperclip,
-    Trash
+    Trash,
+    FileText
 } from 'lucide-react';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { useTabContext } from '@/contexts/TabContext';
+import { Button } from '@/components/ui';
 import api from '@/lib/api';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import { createPortal } from 'react-dom';
@@ -460,6 +462,8 @@ function ReceiptForm({ initialData, onCancel, onSuccess }: { initialData?: any, 
     const [customerOptions, setCustomerOptions] = useState<any[]>([]);
     const [invoiceOptions, setInvoiceOptions] = useState<any[]>([]);
     const [selectedInvoices, setSelectedInvoices] = useState<any[]>([]);
+    const [editingItem, setEditingItem] = useState<any>(null); // For Modal
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const [formData, setFormData] = useState({
         customerId: initialData?.customerId || '',
@@ -619,66 +623,50 @@ function ReceiptForm({ initialData, onCancel, onSuccess }: { initialData?: any, 
     };
 
     return (
-        <div className="flex flex-col h-full bg-surface-50">
+        <div className="flex flex-col h-full bg-[#f0f2f5]">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-surface-200 flex-none shadow-sm">
-                <div className="flex items-center gap-2">
-                    <span className="font-semibold text-lg text-warmgray-800">
-                        {isEdit ? formData.receiptNumber : 'Data Baru'}
+            <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-warmgray-200 flex-none shadow-sm z-30">
+                <div className="flex items-center gap-3">
+                    <FileText className="h-5 w-5 text-[#d95d39]" />
+                    <span className="font-bold text-lg text-[#d95d39]">
+                        {isEdit ? formData.receiptNumber : 'Penerimaan Penjualan Baru'}
                     </span>
-                    <button onClick={onCancel} className="p-1 hover:bg-surface-100 rounded text-warmgray-500">
-                        <X className="h-4 w-4" />
-                    </button>
+
                 </div>
                 <div className="flex items-center gap-2">
                     {/* ACTION BUTTONS */}
+                    <button onClick={onCancel} className="text-warmgray-600 hover:text-warmgray-900 font-medium text-sm transition-colors mr-2">
+                        Batalkan
+                    </button>
                     {isEdit && (
-                        <button
+                        <Button
+                            variant="outline"
+                            className="bg-white hover:bg-red-50 text-red-600 border-red-200 hover:border-red-300 font-semibold h-9"
                             onClick={handleDelete}
-                            className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded shadow-sm border border-red-200"
-                            title="Hapus"
                         >
-                            <Trash className="h-5 w-5" />
-                        </button>
+                            <Trash className="h-4 w-4 mr-2" />
+                            Hapus
+                        </Button>
                     )}
 
-                    <Tooltip text="Simpan">
-                        <button
-                            onClick={handleSave}
-                            className="p-2 bg-primary-600 hover:bg-primary-700 text-white rounded shadow-sm"
-                        >
-                            <Save className="h-5 w-5" />
-                        </button>
-                    </Tooltip>
-
-                    <Tooltip text="Cetak">
-                        <button className="p-2 bg-primary-100 hover:bg-primary-200 text-primary-700 rounded shadow-sm border border-primary-200">
-                            <Printer className="h-5 w-5" />
-                        </button>
-                    </Tooltip>
-                    <Tooltip text="Lampiran">
-                        <button className="p-2 bg-primary-100 hover:bg-primary-200 text-primary-700 rounded shadow-sm border border-primary-200">
-                            <Paperclip className="h-5 w-5" />
-                        </button>
-                    </Tooltip>
-                    <Tooltip text="Pengaturan">
-                        <button className="p-2 bg-primary-100 hover:bg-primary-200 text-primary-700 rounded shadow-sm border border-primary-200">
-                            <Settings className="h-5 w-5" />
-                        </button>
-                    </Tooltip>
+                    <Button
+                        onClick={handleSave}
+                        className="bg-primary-600 hover:bg-primary-700 text-white font-semibold h-9 shadow-sm"
+                    >
+                        <Save className="h-4 w-4 mr-2" />
+                        Simpan
+                    </Button>
                 </div>
             </div>
 
-            {/* Top Form Section */}
-            <div className="p-4 bg-surface-50 flex-none">
-                <div className="grid grid-cols-12 gap-6 bg-surface-50">
-                    {/* Left Column */}
-                    <div className="col-span-8 space-y-3">
-                        <div className="grid grid-cols-12 gap-2 items-center">
-                            <label className="col-span-2 text-sm font-medium text-warmgray-700">
-                                Terima dari <span className="text-red-500">*</span>
-                            </label>
-                            <div className="col-span-10 max-w-lg">
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                {/* Top Form Section */}
+                <div className="bg-white border-b border-warmgray-200 px-6 py-4 flex-shrink-0 relative z-20">
+                    <div className="flex flex-wrap gap-6 items-start">
+                        {/* Customer */}
+                        <div className="w-full max-w-[350px]">
+                            <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Terima Dari <span className="text-red-500">*</span></label>
+                            <div className="relative">
                                 <SearchableSelect
                                     options={customerOptions}
                                     value={formData.customerId}
@@ -690,17 +678,16 @@ function ReceiptForm({ initialData, onCancel, onSuccess }: { initialData?: any, 
                                             customerName: selected ? selected.label : ''
                                         });
                                     }}
-                                    placeholder="Cari/Pilih Pelanggan..."
+                                    placeholder="Cari Pelanggan..."
                                     className="w-full"
                                 />
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-12 gap-2 items-center">
-                            <label className="col-span-2 text-sm font-medium text-warmgray-700">
-                                Bank <span className="text-red-500">*</span>
-                            </label>
-                            <div className="col-span-10 max-w-lg">
+                        {/* Bank */}
+                        <div className="w-full max-w-[300px]">
+                            <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Setor Ke (Kas/Bank) <span className="text-red-500">*</span></label>
+                            <div className="relative">
                                 <SearchableSelect
                                     options={bankOptions}
                                     value={formData.bankId}
@@ -712,151 +699,241 @@ function ReceiptForm({ initialData, onCancel, onSuccess }: { initialData?: any, 
                                             bankName: selected ? selected.label : ''
                                         });
                                     }}
-                                    placeholder="Cari/Pilih..."
+                                    placeholder="Pilih Akun..."
                                     className="w-full"
                                 />
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-12 gap-2 items-center">
-                            <label className="col-span-2 text-sm font-medium text-warmgray-700">
-                                Nilai Pembayaran
-                            </label>
-                            <div className="col-span-10 flex gap-2 max-w-lg">
-                                <input
-                                    type="text"
-                                    className="flex-1 px-3 py-1.5 text-sm border border-surface-300 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                                    value={formData.amount > 0 ? formatCurrency(formData.amount) : ''}
-                                    onChange={(e) => {
-                                        const val = e.target.value.replace(/[^0-9]/g, '');
-                                        setFormData({ ...formData, amount: Number(val) });
+                        {/* Date */}
+                        <div className="w-full max-w-[150px]">
+                            <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Tanggal Transaksi</label>
+                            <input
+                                type="date"
+                                className="w-full px-3 py-1.5 text-sm border border-warmgray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 h-[38px] bg-white font-medium text-warmgray-900"
+                                value={formData.receiptDate}
+                                onChange={(e) => setFormData({ ...formData, receiptDate: e.target.value })}
+                            />
+                        </div>
+
+                    </div>
+                </div>
+
+                {/* Middle Section - Toolbar & Table */}
+                <div className="flex-1 flex flex-col bg-white overflow-hidden p-6 relative bg-[#f0f2f5]">
+                    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-warmgray-200 overflow-hidden relative">
+
+                        {/* Search / Toolbar */}
+                        <div className="p-2 border-b border-warmgray-200 flex items-center gap-2 bg-warmgray-50/50">
+                            <div className={cn("relative flex-1 max-w-xl", !formData.customerId && "cursor-not-allowed opacity-60")}>
+                                <SearchableSelect
+                                    options={invoiceOptions}
+                                    value=""
+                                    onChange={(val) => {
+                                        if (!formData.customerId) {
+                                            alert("Pilih Pelanggan Terlebih Dahulu");
+                                            return;
+                                        }
+                                        if (!val) return;
+                                        const selected = invoiceOptions.find(opt => opt.value === val);
+                                        if (selected && selected.originalData) {
+                                            if (selectedInvoices.find((inv: any) => inv.id === selected.value)) {
+                                                return;
+                                            }
+                                            setSelectedInvoices([...selectedInvoices, selected.originalData]);
+                                        }
                                     }}
-                                    placeholder="0"
+                                    placeholder={formData.customerId ? "Cari No. Faktur untuk ditambah..." : "Pilih Pelanggan Dulu..."}
+                                    className="w-full"
+                                    disabled={!formData.customerId}
                                 />
+                            </div>
+                            <div className="px-3 py-1.5 bg-white border border-warmgray-300 rounded text-sm font-medium text-warmgray-700 shadow-sm flex items-center gap-2 ml-auto">
+                                <span>{selectedInvoices.length} Item</span>
+                            </div>
+                        </div>
+
+                        {/* Table Content */}
+                        <div className="flex-1 overflow-auto bg-white relative">
+                            <table className="w-full text-xs z-10 relative">
+                                <thead className="bg-warmgray-50 sticky top-0 z-20 border-b border-warmgray-200">
+                                    <tr>
+                                        <th className="py-2 px-2 w-[30px] text-center font-semibold text-warmgray-600 border-r border-warmgray-200">No</th>
+                                        <th className="py-2 px-4 text-left font-semibold text-warmgray-600 border-r border-warmgray-200">No. Faktur</th>
+                                        <th className="py-2 px-4 text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Tgl Faktur</th>
+                                        <th className="py-2 px-4 w-[150px] text-right font-semibold text-warmgray-600 border-r border-warmgray-200">Total Faktur</th>
+                                        <th className="py-2 px-4 w-[150px] text-right font-semibold text-warmgray-600 border-r border-warmgray-200">Sisa Tagihan</th>
+                                        <th className="py-2 px-4 w-[150px] text-right font-semibold text-warmgray-600">Pembayaran</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-warmgray-100">
+                                    {selectedInvoices.length > 0 ? (
+                                        selectedInvoices.map((inv, index) => (
+                                            <tr
+                                                key={inv.id}
+                                                className="odd:bg-white even:bg-[#fafafb] hover:bg-primary-50 transition-colors group cursor-pointer"
+                                                onClick={() => {
+                                                    setEditingItem({ ...inv, index });
+                                                    setIsModalOpen(true);
+                                                }}
+                                            >
+                                                <td className="py-1.5 px-2 text-center text-warmgray-400 border-r border-warmgray-100">{index + 1}</td>
+                                                <td className="py-1.5 px-4 font-medium text-warmgray-900 border-r border-warmgray-100">{inv.fakturNumber}</td>
+                                                <td className="py-1.5 px-4 text-warmgray-600 border-r border-warmgray-100">{inv.fakturDate}</td>
+                                                <td className="py-1.5 px-4 text-right text-warmgray-900 border-r border-warmgray-100 font-medium">{formatCurrency(inv.total).replace('Rp', '')}</td>
+                                                <td className="py-1.5 px-4 text-right text-warmgray-900 border-r border-warmgray-100 font-medium">{formatCurrency(inv.total - (inv.amountPaid || 0)).replace('Rp', '')}</td>
+                                                <td className="py-1.5 px-4 text-right text-warmgray-900 font-bold text-primary-700 bg-primary-50/10">
+                                                    {formatCurrency(inv.thisPayment || (inv.total - (inv.amountPaid || 0))).replace('Rp', '')}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={7} className="py-12 text-center text-warmgray-400 italic">
+                                                Belum ada faktur yang dipilih. Gunakan pencarian di atas untuk menambahkan faktur.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Bottom Total Section */}
+                <div className="bg-white border-t border-warmgray-300 px-6 py-3 flex items-center justify-end shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-20 flex-none">
+                    <div className="flex items-center gap-4">
+                        <div className="flex flex-col items-end mr-4">
+                            <div className="flex items-center gap-2 text-sm text-warmgray-600">
+                                Total Pembayaran
                                 <button
                                     onClick={handlePayAll}
-                                    title="Bayar Sesuai Total Faktur"
-                                    className="p-1.5 border border-surface-300 bg-white rounded text-primary-600 hover:bg-surface-50"
+                                    title="Bayar Sesuai Total Tagihan"
+                                    className="p-1 hover:bg-primary-50 text-primary-600 rounded"
                                 >
                                     <Package className="h-4 w-4" />
                                 </button>
                             </div>
                         </div>
-                    </div>
-
-                    {/* Right Column */}
-                    <div className="col-span-4 space-y-3">
-                        <div className="grid grid-cols-12 gap-2 items-center">
-                            <label className="col-span-4 text-sm font-medium text-warmgray-700 text-right pr-2">
-                                Tgl Bayar <span className="text-red-500">*</span>
-                            </label>
-                            <div className="col-span-8 relative">
-                                <input
-                                    type="date"
-                                    className="w-full px-3 py-1.5 text-sm border border-surface-300 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
-                                    value={formData.receiptDate}
-                                    onChange={(e) => setFormData({ ...formData, receiptDate: e.target.value })}
-                                />
-                            </div>
+                        <div className="px-5 py-2 bg-warmgray-50 border border-warmgray-200 rounded min-w-[200px] text-right">
+                            <span className="text-xl font-bold text-primary-600">{formatCurrency(formData.amount)}</span>
                         </div>
                     </div>
                 </div>
+
             </div>
 
-            {/* Middle Section - Toolbar & Table */}
-            <div className="flex-1 flex flex-col bg-white border-t border-surface-200 mt-2 mx-4 rounded-t-lg shadow-sm">
-
-                {/* Search / Toolbar */}
-                <div className="p-2 border-b border-surface-200 flex items-center justify-between bg-surface-50 rounded-t-lg">
-                    <div className="flex-1 max-w-lg relative">
-                        <SearchableSelect
-                            options={invoiceOptions}
-                            value=""
-                            onChange={(val) => {
-                                if (!formData.customerId) {
-                                    alert("Pilih Pelanggan Terlebih Dahulu");
-                                    return;
-                                }
-                                if (!val) return;
-                                const selected = invoiceOptions.find(opt => opt.value === val);
-                                if (selected && selected.originalData) {
-                                    if (selectedInvoices.find((inv: any) => inv.id === selected.value)) {
-                                        return;
-                                    }
-                                    setSelectedInvoices([...selectedInvoices, selected.originalData]);
-                                }
-                            }}
-                            placeholder="Cari No. Faktur..."
-                            className="w-full"
-                            disabled={!formData.customerId}
-                        />
-                    </div>
-                    <div className="ml-4 flex items-center">
-                        <span className="text-sm font-medium text-warmgray-700">Faktur <span className="text-red-500">*</span></span>
-                    </div>
-                </div>
-
-                {/* Table Header */}
-                <div className="flex-1 overflow-auto bg-white">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-white uppercase bg-warmgray-600 sticky top-0 z-10">
-                            <tr>
-                                <Th className="text-white">No. Faktur</Th>
-                                <Th className="text-white">Tgl Faktur</Th>
-                                <Th className="text-white text-right">Total Faktur</Th>
-                                <Th className="text-white text-right">Terutang</Th>
-                                <Th className="text-white text-right">Bayar</Th>
-                                <Th className="text-white text-right">Diskon</Th>
-                                <Th className="text-white text-right">Pembayaran</Th>
-                                <th className="px-4 py-2 w-8"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {selectedInvoices.length > 0 ? (
-                                selectedInvoices.map((inv, index) => (
-                                    <tr key={inv.id} className="border-b border-surface-100 hover:bg-surface-50">
-                                        <td className="px-4 py-2 font-medium">{inv.fakturNumber}</td>
-                                        <td className="px-4 py-2">{inv.fakturDate}</td>
-                                        <td className="px-4 py-2 text-right">{formatCurrency(inv.total)}</td>
-                                        <td className="px-4 py-2 text-right">{formatCurrency(inv.total - (inv.amountPaid || 0))}</td>
-                                        <td className="px-4 py-2 text-right">{formatCurrency(inv.thisPayment || (inv.total - (inv.amountPaid || 0)))}</td>
-                                        <td className="px-4 py-2 text-right">0</td>
-                                        <td className="px-4 py-2 text-right">{formatCurrency(inv.thisPayment || (inv.total - (inv.amountPaid || 0)))}</td>
-                                        <td className="px-4 py-2 text-center">
-                                            <button
-                                                onClick={() => {
-                                                    const newInvoices = [...selectedInvoices];
-                                                    newInvoices.splice(index, 1);
-                                                    setSelectedInvoices(newInvoices);
-                                                }}
-                                                className="text-red-500 hover:text-red-700"
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={8} className="px-4 py-8 text-center text-warmgray-500">
-                                        Belum ada data
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Bottom Total Section */}
-            <div className="bg-surface-100 p-4 border-t border-surface-200 mt-auto flex justify-end gap-8">
-                <div className="text-right">
-                    <p className="text-sm font-medium text-warmgray-600">Nilai Pembayaran</p>
-                    <p className="text-lg font-bold text-warmgray-900">{formatCurrency(formData.amount)}</p>
-                </div>
-            </div>
-
+            {/* Modal */}
+            <ReceiptItemModal
+                isOpen={isModalOpen}
+                item={editingItem}
+                onClose={() => setIsModalOpen(false)}
+                onSave={(newAmount) => {
+                    const newInvoices = [...selectedInvoices];
+                    if (editingItem && editingItem.index !== undefined && newInvoices[editingItem.index]) {
+                        newInvoices[editingItem.index] = { ...newInvoices[editingItem.index], thisPayment: newAmount };
+                        setSelectedInvoices(newInvoices);
+                    }
+                    setIsModalOpen(false);
+                }}
+                onDelete={() => {
+                    const newInvoices = [...selectedInvoices];
+                    if (editingItem && editingItem.index !== undefined) {
+                        newInvoices.splice(editingItem.index, 1);
+                        setSelectedInvoices(newInvoices);
+                    }
+                    setIsModalOpen(false);
+                }}
+            />
         </div>
+    );
+}
+
+function ReceiptItemModal({
+    isOpen,
+    onClose,
+    item,
+    onSave,
+    onDelete
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    item: any;
+    onSave: (amount: number) => void;
+    onDelete: () => void;
+}) {
+    const [amount, setAmount] = useState(0);
+
+    useEffect(() => {
+        if (isOpen && item) {
+            setAmount(item.thisPayment || (item.total - (item.amountPaid || 0)));
+        }
+    }, [isOpen, item]);
+
+    if (!isOpen || !item) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="px-4 py-3 border-b border-warmgray-200 flex items-center justify-between bg-warmgray-50">
+                    <h3 className="font-bold text-md text-warmgray-800">Rincian Faktur</h3>
+                    <button onClick={onClose} className="p-1 hover:bg-warmgray-200 rounded text-warmgray-500">
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+                <div className="p-5 space-y-4">
+                    <div className="space-y-3 text-sm">
+                        <div className="flex justify-between border-b border-warmgray-100 pb-2">
+                            <span className="text-warmgray-500">No. Faktur</span>
+                            <span className="font-medium text-warmgray-900">{item.fakturNumber}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-warmgray-100 pb-2">
+                            <span className="text-warmgray-500">Total Faktur</span>
+                            <span className="font-medium text-warmgray-900">{formatCurrency(item.total)}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-warmgray-100 pb-2">
+                            <span className="text-warmgray-500">Sisa Tagihan</span>
+                            <span className="font-medium text-warmgray-900">{formatCurrency(item.total - (item.amountPaid || 0))}</span>
+                        </div>
+                    </div>
+
+                    <div className="pt-2">
+                        <label className="block text-sm font-bold text-warmgray-700 mb-2">Nilai Pembayaran</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-warmgray-400 font-medium">Rp</span>
+                            <input
+                                type="number"
+                                className="w-full pl-9 pr-3 py-2 border border-warmgray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-bold text-right text-lg"
+                                value={amount}
+                                onChange={(e) => setAmount(Number(e.target.value))}
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                </div>
+                <div className="px-4 py-3 border-t border-warmgray-200 bg-warmgray-50 flex justify-between items-center">
+                    <button
+                        onClick={() => {
+                            if (confirm('Hapus item ini dari daftar pembayaran?')) onDelete();
+                        }}
+                        className="px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50 border border-red-200 rounded hover:border-red-300 transition-colors flex items-center gap-1"
+                    >
+                        <Trash className="h-3.5 w-3.5" />
+                        Hapus
+                    </button>
+                    <div className="flex gap-2">
+                        <button onClick={onClose} className="px-3 py-1.5 text-sm font-semibold text-warmgray-600 hover:bg-warmgray-200 rounded transition-colors">Batal</button>
+                        <button
+                            onClick={() => onSave(amount)}
+                            className="px-4 py-1.5 text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 rounded shadow-sm transition-colors"
+                        >
+                            Simpan
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
     );
 }
 
