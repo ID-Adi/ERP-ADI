@@ -551,7 +551,9 @@ export default function InvoiceForm({
           )}
 
           {activeView === 'costs' && (
-            <InvoiceCostsView />
+            <InvoiceCostsView
+              invoiceId={initialData.id}
+            />
           )}
 
           {activeView === 'history' && (
