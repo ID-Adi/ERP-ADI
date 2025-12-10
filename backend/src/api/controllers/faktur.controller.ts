@@ -86,6 +86,8 @@ router.get('/', async (req: Request, res: Response) => {
             fakturDate: faktur.fakturDate.toISOString().split('T')[0],
             salesPerson: faktur.createdBy || 'Unknown',
             total: Number(faktur.totalAmount),
+            totalAmount: Number(faktur.totalAmount),
+            amountPaid: Number(faktur.amountPaid),
             status: faktur.status
         }));
 

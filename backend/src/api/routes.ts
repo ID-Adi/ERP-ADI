@@ -11,6 +11,8 @@ import accountRoutes from './controllers/account.controller';
 import reportRoutes from './controllers/report.controller';
 import warehouseRoutes from './controllers/warehouse.controller';
 import salesReceiptRoutes from './controllers/salesReceipt.controller';
+import salespersonRoutes from './controllers/salesperson.controller';
+import employeeRoutes from './controllers/employee.controller';
 
 const router = Router();
 
@@ -29,5 +31,7 @@ router.use('/accounts', accountRoutes);
 router.use('/reports', reportRoutes);
 router.use('/warehouses', warehouseRoutes);
 router.use('/sales-receipts', salesReceiptRoutes);
+router.use('/salespersons', salespersonRoutes);
+router.use('/employees', employeeRoutes);
 
 export default router;

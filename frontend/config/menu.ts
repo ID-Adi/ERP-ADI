@@ -63,6 +63,9 @@ export const menuItems: MenuItem[] = [
         title: 'Perusahaan',
         href: '/dashboard/company',
         icon: Building2,
+        children: [
+            { title: 'Karyawan', href: '/dashboard/company/employees', icon: Users },
+        ],
     },
     {
         title: 'Buku Besar',

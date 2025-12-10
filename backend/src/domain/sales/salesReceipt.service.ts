@@ -205,9 +205,18 @@ export class SalesReceiptService {
     }
 
     async findAll(companyId: string, params: any) {
-        // ... filtering logic
+        const where: any = { companyId };
+
+        if (params.fakturId) {
+            where.lines = {
+                some: {
+                    fakturId: params.fakturId
+                }
+            };
+        }
+
         return prisma.salesReceipt.findMany({
-            where: { companyId },
+            where,
             include: {
                 customer: true,
                 lines: {

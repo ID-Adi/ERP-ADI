@@ -53,9 +53,8 @@ export default function CompanyPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {menuItems.map((item, index) => {
                     const Icon = item.icon;
-                    return (
+                    const content = (
                         <div
-                            key={index}
                             className={cn(
                                 "group relative flex flex-col items-center justify-center p-6 rounded-xl transition-all duration-200 cursor-pointer border",
                                 "hover:shadow-lg hover:-translate-y-1",
@@ -69,6 +68,33 @@ export default function CompanyPage() {
                             <span className="text-sm font-medium text-warmgray-700 text-center leading-tight">
                                 {item.title}
                             </span>
+                        </div>
+                    );
+
+                    if (item.title === 'Karyawan') {
+                        return (
+                            <div
+                                key={index}
+                                onClick={() => {
+                                    // We can't easily access context here without wrapping or using a hook in a child
+                                    // But since this is a client component, we can use router.push which TabContext listens to
+                                    // OR we can use the context if we are inside the provider (we are)
+                                    // Let's use Link as it's standard navigation, but ensure TabContext picks it up.
+                                    // The issue might be that TabContext needs to know about this route.
+                                    // If the user says "tabbar yang memiliki background hitam", that's the Feature Tab bar.
+                                    // This usually corresponds to the URL segment.
+                                }}
+                            >
+                                <Link href="/dashboard/company/employees">
+                                    {content}
+                                </Link>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div key={index}>
+                            {content}
                         </div>
                     );
                 })}

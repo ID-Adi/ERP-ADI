@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 import { X, Search, Trash2, Edit2, RotateCcw, Calculator } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { cn, formatCurrency } from '@/lib/utils';
+import SearchableSelect from '@/components/ui/SearchableSelect';
+import api from '@/lib/api';
 
 interface LineItem {
     id: string;
@@ -21,6 +23,7 @@ interface LineItem {
     totalAmount: number;
     warehouseId?: string;
     salespersonId?: string;
+    itemId?: string;
 }
 
 interface ProductDetailModalProps {
@@ -31,17 +34,6 @@ interface ProductDetailModalProps {
     initialData?: LineItem;
     mode: 'add' | 'edit';
 }
-
-// Dummy Data
-const warehouses = [
-    { id: 'WH-01', name: 'GUDANG UTAMA' },
-    { id: 'WH-02', name: 'GUDANG PALANGKARAYA' },
-];
-
-const salespersons = [
-    { id: 'SP-01', name: 'SC - Santi' },
-    { id: 'SP-02', name: 'SC - Budi' },
-];
 
 export default function ProductDetailModal({
     isOpen,
@@ -64,9 +56,39 @@ export default function ProductDetailModal({
         lineAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
-        warehouseId: 'WH-01',
-        salespersonId: 'SP-01',
+        warehouseId: '',
+        salespersonId: '',
     });
+
+    const [warehouses, setWarehouses] = useState<any[]>([]);
+    const [salespersons, setSalespersons] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!isOpen) return; // Only fetch when open
+
+            try {
+                // Pass itemId if available to fetch specific stock
+                const itemId = formData.itemId || initialData?.itemId;
+
+                const [whRes, spRes] = await Promise.all([
+                    api.get('/warehouses', { params: { itemId } }),
+                    api.get('/salespersons')
+                ]);
+                const whData = whRes.data.data || [];
+                setWarehouses(whData);
+                setSalespersons(spRes.data.data || []);
+
+                // Set default warehouse if available and not set
+                if (whData.length > 0 && !formData.warehouseId) {
+                    setFormData(prev => ({ ...prev, warehouseId: whData[0].id }));
+                }
+            } catch (error) {
+                console.error('Failed to fetch master data:', error);
+            }
+        };
+        fetchData();
+    }, [isOpen, formData.itemId]); // Refetch when modal opens or item changes
 
     useEffect(() => {
         if (isOpen) {
@@ -96,8 +118,8 @@ export default function ProductDetailModal({
                     lineAmount: 0,
                     taxAmount: 0,
                     totalAmount: 0,
-                    warehouseId: 'WH-01',
-                    salespersonId: 'SP-01',
+                    warehouseId: '',
+                    salespersonId: '',
                 });
             }
         }
@@ -157,11 +179,18 @@ export default function ProductDetailModal({
         setFormData(prev => ({ ...prev, discountAmount: amount, discountPercent: percent }));
     };
 
-    if (!isOpen) return null;
+    const [mounted, setMounted] = useState(false);
 
-    return (
-        <div className="absolute inset-0 z-[50] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
+
+    if (!isOpen || !mounted) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
                 {/* Header */}
@@ -299,18 +328,17 @@ export default function ProductDetailModal({
                     {/* Row 7: Warehouse */}
                     <div className="grid grid-cols-12 gap-3 items-center">
                         <label className="col-span-3 text-sm font-medium text-warmgray-700">Gudang <span className="text-red-500">*</span></label>
-                        <div className="col-span-6 relative">
-                            <select
+                        <div className="col-span-9 relative">
+                            <SearchableSelect
+                                options={warehouses.map(wh => ({
+                                    value: wh.id,
+                                    label: wh.name,
+                                    description: wh.stock !== undefined ? `Stok: ${wh.stock} ${formData.unit || 'PCS'}` : wh.code
+                                }))}
                                 value={formData.warehouseId}
-                                onChange={(e) => handleChange('warehouseId', e.target.value)}
-                                className="w-full pl-3 pr-8 py-1.5 border border-warmgray-300 rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white"
-                            >
-                                {warehouses.map(wh => (
-                                    <option key={wh.id} value={wh.id}>{wh.name}</option>
-                                ))}
-                            </select>
-                            <X className="absolute right-7 top-2 h-3.5 w-3.5 text-warmgray-400 cursor-pointer" />
-                            <Search className="absolute right-2 top-2 h-3.5 w-3.5 text-warmgray-500 pointer-events-none" />
+                                onChange={(val) => handleChange('warehouseId', val)}
+                                placeholder="Pilih Gudang..."
+                            />
                         </div>
                     </div>
 
@@ -318,17 +346,12 @@ export default function ProductDetailModal({
                     <div className="grid grid-cols-12 gap-3 items-center">
                         <label className="col-span-3 text-sm font-medium text-warmgray-700">Penjual</label>
                         <div className="col-span-9 relative">
-                            <select
+                            <SearchableSelect
+                                options={salespersons.map(sp => ({ value: sp.id, label: sp.name, description: sp.code }))}
                                 value={formData.salespersonId}
-                                onChange={(e) => handleChange('salespersonId', e.target.value)}
-                                className="w-full pl-3 pr-8 py-1.5 border border-warmgray-300 rounded focus:ring-1 focus:ring-primary-500 text-sm appearance-none"
-                            >
-                                {salespersons.map(sp => (
-                                    <option key={sp.id} value={sp.id}>{sp.name}</option>
-                                ))}
-                            </select>
-                            <X className="absolute right-7 top-2 h-3.5 w-3.5 text-warmgray-400 cursor-pointer" />
-                            <Search className="absolute right-2 top-2 h-3.5 w-3.5 text-warmgray-500 pointer-events-none" />
+                                onChange={(val) => handleChange('salespersonId', val)}
+                                placeholder="Pilih Penjual..."
+                            />
                         </div>
                     </div>
 
@@ -343,11 +366,18 @@ export default function ProductDetailModal({
                         </Button>
                     ) : <div />}
 
-                    <Button variant="primary" className="bg-primary-700 hover:bg-primary-800 text-white min-w-[100px] h-9" onClick={() => onSave(formData)}>
+                    <Button variant="primary" className="bg-primary-700 hover:bg-primary-800 text-white min-w-[100px] h-9" onClick={() => {
+                        if (!formData.warehouseId) {
+                            alert("Mohon pilih gudang terlebih dahulu");
+                            return;
+                        }
+                        onSave(formData);
+                    }}>
                         Lanjut
                     </Button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

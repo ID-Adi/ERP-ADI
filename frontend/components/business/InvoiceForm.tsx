@@ -9,12 +9,12 @@ import {
 import { Button, useToast } from '@/components/ui';
 import api from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
-
-// Import Views
+import { confirmAction } from '@/lib/swal';
 import InvoiceItemsView from './invoice/InvoiceItemsView';
 import InvoiceInfoView from './invoice/InvoiceInfoView';
 import InvoiceCostsView from './invoice/InvoiceCostsView';
 import InvoiceHistoryView from './invoice/InvoiceHistoryView';
+import CustomerSelect from './invoice/CustomerSelect';
 
 // --- Interfaces ---
 interface LineItem {
@@ -31,6 +31,8 @@ interface LineItem {
   lineAmount: number;
   taxAmount: number;
   totalAmount: number;
+  warehouseId?: string;
+  salespersonId?: string;
 }
 
 interface InvoiceFormProps {
@@ -43,6 +45,7 @@ interface InvoiceFormProps {
     currency?: string;
     fakturNumber?: string;
     id?: string;
+    salespersonId?: string;
   };
   onDataChange: (data: any) => void;
   onSave: () => void;
@@ -50,8 +53,6 @@ interface InvoiceFormProps {
   tabLabel?: string;
   onTabLabelChange?: (label: string) => void;
 }
-
-import CustomerSelect from './invoice/CustomerSelect';
 
 type ViewType = 'items' | 'info' | 'costs' | 'history';
 
@@ -80,7 +81,8 @@ export default function InvoiceForm({
     paymentTerms: (initialData as any).paymentTerms || '',
     taxInclusive: (initialData as any).taxInclusive ?? true, // Default to true (Tax Inclusive)
     shippingDate: (initialData as any).shippingDate || new Date().toISOString().split('T')[0],
-    dueDate: initialData.dueDate || new Date().toISOString().split('T')[0] // Default to Now
+    dueDate: initialData.dueDate || new Date().toISOString().split('T')[0], // Default to Now
+    salespersonId: initialData.salespersonId || '',
   });
 
   const [lines, setLines] = useState<LineItem[]>(initialData.lines || []);
@@ -97,6 +99,33 @@ export default function InvoiceForm({
     };
     fetchCustomers();
   }, []);
+
+  // Auto-set Salesperson from first line item
+  useEffect(() => {
+    if (lines.length > 0) {
+      const firstLine = lines[0];
+      // Only update if formData.salespersonId is empty or different from the first line's salesperson
+      // AND the first line actually has a salesperson
+      // Logic: "if not yet available take salesperson name from the first product input in the table"
+      // "and add logic if the first product is deleted then take from the product in the table data at the top!"
+
+      // We can simply say: Always sync the invoice salesperson with the first line's salesperson IF the invoice salesperson is not manually set?
+      // Or strictly follow: "if not yet available" -> implies only if empty.
+      // But "if first product deleted then take from top" implies dynamic update.
+      // So, let's make it dynamic: If lines exist, default salesperson to the first line's salesperson.
+      // But we should probably allow manual override? The user didn't ask for manual override on the invoice level, 
+      // they asked for logic to *take* it from the table.
+
+      if (firstLine.salespersonId) {
+        setFormData(prev => {
+          if (prev.salespersonId !== firstLine.salespersonId) {
+            return { ...prev, salespersonId: firstLine.salespersonId || '' };
+          }
+          return prev;
+        });
+      }
+    }
+  }, [lines]);
 
   // Calculations State
   const [totals, setTotals] = useState({
@@ -232,6 +261,7 @@ export default function InvoiceForm({
         shippingDate: (formData as any).shippingDate,
         taxInclusive: (formData as any).taxInclusive,
         customerId: selectedCustomer.id,
+        salespersonId: formData.salespersonId || undefined,
         currency: formData.currency || 'IDR',
         subtotal: totals.subtotal,
         discountPercent: 0,
@@ -249,7 +279,8 @@ export default function InvoiceForm({
           quantity: line.quantity,
           unitPrice: line.unitPrice,
           discountPercent: line.discountPercent,
-          amount: line.lineAmount
+          amount: line.lineAmount,
+          warehouseId: line.warehouseId
         }))
       };
 
@@ -287,7 +318,14 @@ export default function InvoiceForm({
   // Delete Handler
   const handleDelete = async () => {
     if (!initialData.id) return;
-    if (!confirm('Apakah Anda yakin ingin menghapus faktur ini?')) return;
+
+    const result = await confirmAction(
+      'Hapus Faktur',
+      'Apakah Anda yakin ingin menghapus faktur ini? Data yang dihapus tidak dapat dikembalikan.',
+      'Ya, Hapus'
+    );
+
+    if (!result.isConfirmed) return;
 
     setIsLoading(true);
     try {
@@ -323,6 +361,7 @@ export default function InvoiceForm({
         fakturDate: formData.fakturDate,
         dueDate: formData.dueDate || null,
         customerId: selectedCustomer?.id || undefined,
+        salespersonId: formData.salespersonId || undefined,
         status: 'DRAFT',
         currency: formData.currency || 'IDR',
         subtotal: totals.subtotal,
@@ -370,12 +409,14 @@ export default function InvoiceForm({
           icon={DollarSign}
           label="Biaya Lainnya"
         />
-        <SidebarButton
-          active={activeView === 'history'}
-          onClick={() => setActiveView('history')}
-          icon={History}
-          label="Informasi Faktur"
-        />
+        {initialData.id && (
+          <SidebarButton
+            active={activeView === 'history'}
+            onClick={() => setActiveView('history')}
+            icon={History}
+            label="Informasi Faktur"
+          />
+        )}
       </div>
 
       {/* 2. Main Content Area */}
@@ -517,6 +558,7 @@ export default function InvoiceForm({
             <InvoiceHistoryView
               formData={formData}
               totals={totals}
+              invoiceId={initialData.id}
             />
           )}
         </div>
@@ -627,4 +669,3 @@ function SidebarButton({ active, onClick, icon: Icon, label }: { active: boolean
     </div>
   )
 }
-

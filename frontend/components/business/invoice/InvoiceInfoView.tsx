@@ -169,11 +169,14 @@ export default function InvoiceInfoView({ formData, onChange }: InvoiceInfoViewP
 
                     <div className="space-y-4 relative">
                         {/* Stamp LUNAS (Smaller here) */}
-                        <div className="absolute top-10 left-0 pointer-events-none opacity-20 z-0 transform -rotate-12 scale-75 origin-top-left">
-                            <div className="border-4 border-green-500 text-green-500 font-bold text-4xl px-4 py-1 rounded-lg tracking-widest">
-                                LUNAS
+                        {/* Stamp LUNAS (Smaller here) - Only show if PAID */}
+                        {formData.status === 'PAID' && (
+                            <div className="absolute top-10 left-0 pointer-events-none opacity-20 z-0 transform -rotate-12 scale-75 origin-top-left">
+                                <div className="border-4 border-green-500 text-green-500 font-bold text-4xl px-4 py-1 rounded-lg tracking-widest">
+                                    LUNAS
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Shipping Date */}
                         <div className="grid grid-cols-12 gap-4 items-center z-20 relative">

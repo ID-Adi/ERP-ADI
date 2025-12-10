@@ -1,0 +1,8 @@
+
+# Valid for project: ERP-ADI-REV2 (vbnkuwbptmbvsnmykvuz)
+DATABASE_URL="postgresql://postgres:%40Head_Office_CC1@db.vbnkuwbptmbvsnmykvuz.supabase.co:5432/postgres"
+DIRECT_URL="postgresql://postgres:%40Head_Office_CC1@db.vbnkuwbptmbvsnmykvuz.supabase.co:5432/postgres"
+
+# JWT Secret
+JWT_SECRET="super-secret-jwt-key-change-this-in-prod"
+PORT=4000

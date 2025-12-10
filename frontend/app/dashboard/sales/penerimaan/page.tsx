@@ -917,7 +917,7 @@ function ReceiptForm({ initialData, onCancel, onSuccess }: { initialData?: any, 
                 const res = await api.get('/fakturs', {
                     params: {
                         customerId: formData.customerId,
-                        status: 'OPEN'
+                        status: 'UNPAID,PARTIAL,OVERDUE'
                     }
                 });
                 if (res.data && res.data.data) {

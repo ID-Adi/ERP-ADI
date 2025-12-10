@@ -28,15 +28,28 @@ export class FakturService {
     }
 
     // Helper: Validate Stock
-    private async validateStock(tx: Prisma.TransactionClient, lines: any[], warehouseId: string) {
+    private async validateStock(tx: Prisma.TransactionClient, lines: any[]) {
+        // Cache default warehouse to avoid repeated queries if needed
+        let defaultWarehouseId: string | null = null;
+
         for (const line of lines) {
             if (!line.itemId || !line.quantity) continue;
             const quantity = Number(line.quantity);
 
-            // Skip if service item (non-stock) - though schema doesn't explicitly flag service items well yet, 
-            // we assume all items with ID are stockable for now unless isStockItem is false.
             const item = await tx.item.findUnique({ where: { id: line.itemId } });
             if (!item || !item.isStockItem) continue;
+
+            // Determine warehouse: Line specific > Default
+            let warehouseId = line.warehouseId;
+            if (!warehouseId) {
+                if (!defaultWarehouseId) {
+                    const defWh = await tx.warehouse.findFirst({ where: { companyId: item.companyId } });
+                    if (defWh) defaultWarehouseId = defWh.id;
+                }
+                warehouseId = defaultWarehouseId;
+            }
+
+            if (!warehouseId) throw new Error(`Gudang tidak ditentukan untuk item: ${item.name}`);
 
             const stock = await tx.itemStock.findUnique({
                 where: {
@@ -49,18 +62,32 @@ export class FakturService {
 
             const available = stock ? Number(stock.availableStock) : 0;
             if (available < quantity) {
-                throw new Error(`Stok tidak mencukupi untuk item: ${item.name}. Tersedia: ${available}, Diminta: ${quantity}`);
+                throw new Error(`Stok tidak mencukupi untuk item: ${item.name} di gudang terpilih. Tersedia: ${available}, Diminta: ${quantity}`);
             }
         }
     }
 
     // Helper: Update Stock
-    private async updateStock(tx: Prisma.TransactionClient, lines: any[], warehouseId: string, direction: 'IN' | 'OUT') {
+    private async updateStock(tx: Prisma.TransactionClient, lines: any[], direction: 'IN' | 'OUT') {
+        let defaultWarehouseId: string | null = null;
+
         for (const line of lines) {
             if (!line.itemId || !line.quantity) continue;
 
             const item = await tx.item.findUnique({ where: { id: line.itemId } });
             if (!item || !item.isStockItem) continue;
+
+            // Determine warehouse
+            let warehouseId = line.warehouseId;
+            if (!warehouseId) {
+                if (!defaultWarehouseId) {
+                    const defWh = await tx.warehouse.findFirst({ where: { companyId: item.companyId } });
+                    if (defWh) defaultWarehouseId = defWh.id;
+                }
+                warehouseId = defaultWarehouseId;
+            }
+
+            if (!warehouseId) throw new Error(`Gudang tidak ditentukan untuk item: ${item.name}`);
 
             const quantity = Number(line.quantity);
             const change = direction === 'IN' ? quantity : -quantity;
@@ -93,8 +120,7 @@ export class FakturService {
                         }
                     });
                 } else {
-                    // Cannot reduce stock if it doesn't exist
-                    // logic handled by validateStock usually, but here allow negative if force
+                    // Force create negative stock if allowed/needed
                     await tx.itemStock.create({
                         data: {
                             itemId: line.itemId,
@@ -372,19 +398,32 @@ export class FakturService {
             const balanceDue = data.balanceDue !== undefined ? Number(data.balanceDue) : (totalAmount - amountPaid);
 
             // 1. Validate Stock (If Active)
-            const warehouse = await tx.warehouse.findFirst({ where: { companyId } });
-            if (!warehouse) throw new Error("No Warehouse configured.");
-
+            // We now validate per line based on its warehouseId
             if (data.status !== 'DRAFT') {
-                await this.validateStock(tx, data.lines, warehouse.id);
+                await this.validateStock(tx, data.lines);
+            }
+
+            // Resolve companyId if default
+            let resolvedCompanyId = companyId;
+            if (companyId === 'default-company') {
+                const defaultCompany = await tx.company.findFirst();
+                if (defaultCompany) {
+                    resolvedCompanyId = defaultCompany.id;
+                }
             }
 
             // 2. Create Faktur
+            // Exclude non-schema fields
+            const { paymentTerms, taxInclusive, ...cleanData } = data;
+
             const fp = await tx.faktur.create({
                 data: {
-                    ...data,
-                    companyId,
+                    ...cleanData,
+                    companyId: resolvedCompanyId,
                     fakturNumber,
+                    fakturDate: new Date(data.fakturDate),
+                    dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+                    shippingDate: data.shippingDate ? new Date(data.shippingDate) : undefined,
                     createdBy: userId,
                     amountPaid,
                     balanceDue,
@@ -395,7 +434,8 @@ export class FakturService {
                             quantity: l.quantity,
                             unitPrice: l.unitPrice,
                             discountPercent: l.discountPercent,
-                            amount: l.amount
+                            amount: l.amount,
+                            warehouseId: l.warehouseId
                         }))
                     }
                 },
@@ -404,12 +444,12 @@ export class FakturService {
 
             // 3. Update Stock & Journals (If not Draft)
             if (fp.status !== 'DRAFT') {
-                await this.updateStock(tx, fp.lines, warehouse.id, 'OUT');
-                await this.createJournalEntries(tx, fp, fp.lines, companyId);
+                await this.updateStock(tx, fp.lines, 'OUT');
+                await this.createJournalEntries(tx, fp, fp.lines, resolvedCompanyId);
             }
 
             return fp;
-        });
+        }, { timeout: 10000 });
     }
 
     async update(id: string, data: any, userId: string) {
@@ -425,8 +465,17 @@ export class FakturService {
 
             // 1. Revert Old Effects (If active)
             if (existing.status !== 'DRAFT') {
-                await this.updateStock(tx, existing.lines, warehouse.id, 'IN');
+                await this.updateStock(tx, existing.lines, 'IN');
                 await this.voidJournals(tx, existing.id);
+            }
+
+            // Resolve companyId if default (for journals check)
+            let resolvedCompanyId = existing.companyId;
+            if (resolvedCompanyId === 'default-company') {
+                const defaultCompany = await tx.company.findFirst();
+                if (defaultCompany) {
+                    resolvedCompanyId = defaultCompany.id;
+                }
             }
 
             // 2. Update Faktur
@@ -437,6 +486,9 @@ export class FakturService {
                 where: { id },
                 data: {
                     ...data,
+                    fakturDate: data.fakturDate ? new Date(data.fakturDate) : undefined,
+                    dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+                    shippingDate: data.shippingDate ? new Date(data.shippingDate) : undefined,
                     lines: {
                         create: data.lines.map((l: any) => ({
                             itemId: l.itemId,
@@ -444,7 +496,8 @@ export class FakturService {
                             quantity: l.quantity,
                             unitPrice: l.unitPrice,
                             discountPercent: l.discountPercent,
-                            amount: l.amount
+                            amount: l.amount,
+                            warehouseId: l.warehouseId
                         }))
                     }
                 },
@@ -453,13 +506,13 @@ export class FakturService {
 
             // 3. Apply New Effects
             if (fp.status !== 'DRAFT' && fp.status !== 'CANCELLED') {
-                await this.validateStock(tx, fp.lines, warehouse.id); // Re-validate new lines
-                await this.updateStock(tx, fp.lines, warehouse.id, 'OUT');
+                await this.validateStock(tx, fp.lines); // Re-validate new lines
+                await this.updateStock(tx, fp.lines, 'OUT');
                 await this.createJournalEntries(tx, fp, fp.lines, fp.companyId);
             }
 
             return fp;
-        });
+        }, { timeout: 10000 });
     }
 
     async delete(id: string) {
@@ -470,12 +523,9 @@ export class FakturService {
             });
             if (!existing) throw new Error("Faktur Not Found");
 
-            const warehouse = await tx.warehouse.findFirst({ where: { companyId: existing.companyId } });
-            if (!warehouse) throw new Error("No Warehouse configured.");
-
             // 1. Revert Effects
             if (existing.status !== 'DRAFT') {
-                await this.updateStock(tx, existing.lines, warehouse.id, 'IN');
+                await this.updateStock(tx, existing.lines, 'IN');
                 await this.voidJournals(tx, existing.id);
             }
 

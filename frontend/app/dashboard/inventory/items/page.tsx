@@ -24,6 +24,7 @@ import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import ImportView from './ImportView';
+import StockModal from './StockModal';
 
 import api from '@/lib/api';
 
@@ -388,6 +389,7 @@ function ListView({
                         </div>
                     }
                     scrollableTarget="scrollableDiv"
+                    className="!overflow-visible"
                 >
                     <table className="w-full text-sm text-left">
                         <thead className="text-xs text-white uppercase bg-warmgray-800 sticky top-0 z-10">
@@ -502,7 +504,8 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                 if (fieldId) acc[fieldId] = curr.accountId;
                 return acc;
             }, {})
-            : {}
+            : {},
+        openingStocks: initialData?.openingStocks || []
     };
 
     const [formData, setFormData] = useState({
@@ -571,23 +574,27 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
 
     const [units, setUnits] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
+    const [warehouses, setWarehouses] = useState<any[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [unitsRes, categoriesRes, accountsRes] = await Promise.all([
+                const [unitsRes, categoriesRes, accountsRes, warehousesRes] = await Promise.all([
                     api.get('/units'),
                     api.get('/categories'),
-                    api.get('/accounts')
+                    api.get('/accounts'),
+                    api.get('/warehouses')
                 ]);
 
                 const unitsData = unitsRes.data.data || unitsRes.data;
                 const categoriesData = categoriesRes.data.data || categoriesRes.data;
                 const accountsData = accountsRes.data.data || accountsRes.data;
+                const warehousesData = warehousesRes.data.data || warehousesRes.data;
 
                 setUnits(Array.isArray(unitsData) ? unitsData : []);
                 setCategories(Array.isArray(categoriesData) ? categoriesData : []);
                 setAccountList(Array.isArray(accountsData) ? accountsData : []);
+                setWarehouses(Array.isArray(warehousesData) ? warehousesData : []);
             } catch (error) {
                 console.error('Failed to fetch data:', error);
             }
@@ -674,10 +681,8 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                 <div className="max-w-6xl mx-auto">
                     {subTab === 'umum' && <TabUmum data={formData} onChange={handleChange} units={units} categories={categories} isEdit={isEdit} />}
                     {subTab === 'penjualan-pembelian' && <TabPenjualanPembelian data={formData} onChange={handleChange} />}
-                    {subTab === 'stok' && <TabStok data={formData} onChange={handleChange} />}
-                    {subTab === 'stok' && <TabStok data={formData} onChange={handleChange} />}
+                    {subTab === 'stok' && <TabStok data={formData} onChange={handleChange} warehouses={warehouses} units={units} />}
                     {subTab === 'akun' && <TabAkun data={formData} onChange={handleChange} accountList={accountList} />}
-                    {subTab === 'lain-lain' && <TabLainLain />}
                     {subTab === 'lain-lain' && <TabLainLain />}
                 </div>
             </div>
@@ -888,19 +893,95 @@ function TabPenjualanPembelian({ data, onChange }: { data: any, onChange: (field
 // ============================================================================
 // TAB: STOK
 // ============================================================================
-function TabStok({ data, onChange }: { data: any, onChange: (field: string, value: any) => void }) {
+function TabStok({ data, onChange, warehouses = [], units = [] }: { data: any, onChange: (field: string, value: any) => void, warehouses?: any[], units?: any[] }) {
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const handleAddStock = (stockData: any) => {
+        const newStocks = [...(data.openingStocks || []), stockData];
+        onChange('openingStocks', newStocks);
+    };
+
+    const totalQty = (data.openingStocks || []).reduce((sum: number, item: any) => sum + Number(item.quantity), 0);
+    const totalCost = (data.openingStocks || []).reduce((sum: number, item: any) => sum + Number(item.totalCost), 0);
+    const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
+
     return (
-        <div className="max-w-2xl">
-            <Card title="Pengaturan Stok">
-                <div className="space-y-4">
-                    <Input
-                        label="Stok Minimum"
-                        type="number"
-                        value={data.minStock}
-                        onChange={(e) => onChange('minStock', Number(e.target.value))}
-                    />
+        <div className="space-y-8 w-full">
+            {/* Summary Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                <div className="bg-white p-6 rounded-xl border border-surface-200 shadow-sm flex flex-col">
+                    <span className="text-sm font-medium text-warmgray-500 mb-1">Total Kuantitas</span>
+                    <span className="text-2xl font-bold text-warmgray-900">{totalQty}</span>
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-surface-200 shadow-sm flex flex-col">
+                    <span className="text-sm font-medium text-warmgray-500 mb-1">Nilai Rata-rata</span>
+                    <span className="text-2xl font-bold text-warmgray-900">{formatCurrency(avgCost)}</span>
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-surface-200 shadow-sm flex flex-col">
+                    <span className="text-sm font-medium text-warmgray-500 mb-1">Total Nilai Persediaan</span>
+                    <span className="text-2xl font-bold text-primary-600">{formatCurrency(totalCost)}</span>
+                </div>
+            </div>
+
+            <Card title="Stok Awal" className="w-full" headerAction={
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium shadow-sm"
+                >
+                    <Plus className="h-4 w-4" />
+                    <span>Tambah Stok</span>
+                </button>
+            }>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-warmgray-500 uppercase bg-surface-50 border-b border-surface-200">
+                            <tr>
+                                <th className="px-6 py-3 font-semibold">Tanggal</th>
+                                <th className="px-6 py-3 font-semibold">Gudang</th>
+                                <th className="px-6 py-3 font-semibold text-right">Kuantitas</th>
+                                <th className="px-6 py-3 font-semibold">Satuan</th>
+                                <th className="px-6 py-3 font-semibold text-right">Biaya Satuan</th>
+                                <th className="px-6 py-3 font-semibold text-right">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-surface-100">
+                            {(!data.openingStocks || data.openingStocks.length === 0) ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-12 text-center text-warmgray-400">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className="p-3 bg-surface-50 rounded-full">
+                                                <div className="w-6 h-6 border-2 border-surface-300 rounded-sm" />
+                                            </div>
+                                            <p>Belum ada data stok awal</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : (
+                                data.openingStocks.map((stock: any, idx: number) => (
+                                    <tr key={idx} className="bg-white hover:bg-surface-50 transition-colors">
+                                        <td className="px-6 py-3 text-warmgray-900">{stock.date}</td>
+                                        <td className="px-6 py-3 text-warmgray-900">
+                                            {warehouses.find(w => w.id === stock.warehouseId)?.name || stock.warehouseId}
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-medium text-warmgray-900">{stock.quantity}</td>
+                                        <td className="px-6 py-3 text-warmgray-600">{stock.unit}</td>
+                                        <td className="px-6 py-3 text-right text-warmgray-600">{formatCurrency(stock.costPerUnit)}</td>
+                                        <td className="px-6 py-3 text-right font-medium text-warmgray-900">{formatCurrency(Number(stock.quantity) * Number(stock.costPerUnit))}</td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </Card>
+
+            <StockModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSave={handleAddStock}
+                warehouses={warehouses}
+                units={units}
+            />
         </div>
     );
 }

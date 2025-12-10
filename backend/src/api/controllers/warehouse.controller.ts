@@ -10,6 +10,7 @@ router.get('/', async (req: Request, res: Response) => {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 20;
         const search = req.query.search as string;
+        const itemId = req.query.itemId as string;
 
         const skip = (page - 1) * limit;
 
@@ -24,15 +25,32 @@ router.get('/', async (req: Request, res: Response) => {
         }
 
         const total = await prisma.warehouse.count({ where });
+
+        // If itemId is provided, include stock info
+        const include = itemId ? {
+            stocks: {
+                where: { itemId },
+                select: { availableStock: true }
+            }
+        } : undefined;
+
         const warehouses = await prisma.warehouse.findMany({
             where,
+            include,
             skip,
             take: limit,
             orderBy: { name: 'asc' }
         });
 
+        // Map response to include stock directly if itemId was requested
+        const data = warehouses.map(wh => {
+            const stock = (wh as any).stocks?.[0]?.availableStock ?? 0;
+            const { stocks, ...rest } = wh as any;
+            return itemId ? { ...rest, stock } : rest;
+        });
+
         res.json({
-            data: warehouses,
+            data,
             meta: {
                 total,
                 page,

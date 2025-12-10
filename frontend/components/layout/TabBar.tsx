@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTabContext } from '@/contexts/TabContext';
 import { cn } from '@/lib/utils';
-
+import { confirmAction } from '@/lib/swal';
 export function FeatureTabBar() {
     const router = useRouter();
     const { featureTabs, activeFeatureTabId, setActiveFeatureTab, closeFeatureTab } = useTabContext();
@@ -98,11 +98,15 @@ export function DataTabBar() {
                         <span>{tab.title}</span>
                         {tab.title !== 'Daftar' && (
                             <button
-                                onClick={(e) => {
+                                onClick={async (e) => {
                                     e.stopPropagation();
                                     if (tab.isDirty) {
-                                        const confirmed = window.confirm('This tab has unsaved changes. Close anyway?');
-                                        if (!confirmed) return;
+                                        const result = await confirmAction(
+                                            'Perubahan Belum Disimpan',
+                                            'Tab ini memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin menutupnya?',
+                                            'Ya, Tutup'
+                                        );
+                                        if (!result.isConfirmed) return;
                                     }
                                     closeDataTab(activeFeature.id, tab.id);
                                 }}

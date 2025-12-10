@@ -34,6 +34,8 @@ model Company {
   units          Unit[]
   accounts       Account[]
   journalEntries JournalEntry[]
+  salespersons   Salesperson[]
+  employees      Employee[]
 }
 
 model User {
@@ -246,6 +248,59 @@ enum PriceType {
   SPECIAL    // Harga khusus
 }
 
+model Salesperson {
+  id        String   @id @default(uuid())
+  companyId String
+  code      String
+  name      String
+  phone     String?
+  email     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employeeId String? @unique
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  company Company @relation(fields: [companyId], references: [id])
+  fakturs Faktur[]
+
+  @@unique([companyId, code])
+}
+
+model Employee {
+  id          String   @id @default(uuid())
+  companyId   String
+  
+  // Personal Info
+  fullName    String
+  salutation  String?
+  position    String?
+  email       String?
+  mobilePhone String?
+  businessPhone String?
+  homePhone   String?
+  whatsapp    String?
+  website     String?
+  citizenship String?
+  
+  // Employment Info
+  employeeIdType   String?
+  idCardNumber     String?
+  joinDate         DateTime?
+  branch           String?
+  notes            String?
+  
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company      @relation(fields: [companyId], references: [id])
+  salesperson Salesperson?
+
+  @@index([companyId])
+}
+
 model Warehouse {
   id        String   @id @default(uuid())
   companyId String
@@ -259,6 +314,7 @@ model Warehouse {
 
   company Company     @relation(fields: [companyId], references: [id])
   stocks  ItemStock[]
+  fakturLines FakturLine[]
 
   @@unique([companyId, code])
 }
@@ -406,9 +462,15 @@ model Faktur {
   salesOrderId  String?       // Optional link to SalesOrder
   fakturDate    DateTime
   dueDate       DateTime?
+  shippingDate  DateTime?
+  paymentTerms  String?
+  taxInclusive  Boolean       @default(true)
 
   customerId    String
   customer      Customer      @relation(fields: [customerId], references: [id])
+
+  salespersonId String?
+  salesperson   Salesperson?  @relation(fields: [salespersonId], references: [id])
 
   status        FakturStatus  @default(DRAFT)
 
@@ -449,6 +511,9 @@ model FakturLine {
   unitPrice     Decimal       @db.Decimal(15, 2)
   discountPercent Decimal     @default(0) @db.Decimal(5, 2)
   amount        Decimal       @db.Decimal(15, 2)
+
+  warehouseId   String?
+  warehouse     Warehouse?    @relation(fields: [warehouseId], references: [id])
 
   faktur        Faktur        @relation(fields: [fakturId], references: [id], onDelete: Cascade)
   item          Item?         @relation(fields: [itemId], references: [id])
