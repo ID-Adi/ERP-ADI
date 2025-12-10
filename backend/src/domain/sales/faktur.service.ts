@@ -5,26 +5,48 @@ const prisma = new PrismaClient();
 
 export class FakturService {
 
-    async generateFakturNumber(companyId: string): Promise<string> {
+    async generateFakturNumber(companyId: string, tx?: Prisma.TransactionClient): Promise<string> {
+        const db = tx || prisma; // Use transaction client if provided
         const today = new Date();
         const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+        const prefix = `FKT-${dateStr}-`;
 
-        // Get the count of fakturs created today
-        const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-        const endOfDay = new Date(today.setHours(23, 59, 59, 999));
-
-        const count = await prisma.faktur.count({
+        // Optimistic Guess: Find last one
+        const lastFaktur = await db.faktur.findFirst({
             where: {
                 companyId,
-                createdAt: {
-                    gte: startOfDay,
-                    lte: endOfDay
-                }
-            }
+                fakturNumber: { startsWith: prefix }
+            },
+            orderBy: { fakturNumber: 'desc' }
         });
 
-        const sequence = String(count + 1).padStart(3, '0');
-        return `FKT-${dateStr}-${sequence}`;
+        let sequenceNumber = 1;
+        if (lastFaktur) {
+            const parts = lastFaktur.fakturNumber.split('-');
+            const lastSeq = parseInt(parts[parts.length - 1]);
+            if (!isNaN(lastSeq)) {
+                sequenceNumber = lastSeq + 1;
+            }
+        }
+
+        // Collision Check Loop (Safety Net)
+        let candidate = `${prefix}${String(sequenceNumber).padStart(3, '0')}`;
+        let isUnique = false;
+
+        while (!isUnique) {
+            const exists = await db.faktur.count({
+                where: { companyId, fakturNumber: candidate }
+            });
+
+            if (exists > 0) {
+                sequenceNumber++;
+                candidate = `${prefix}${String(sequenceNumber).padStart(3, '0')}`;
+            } else {
+                isUnique = true;
+            }
+        }
+
+        return candidate;
     }
 
     // Helper: Validate Stock
@@ -390,7 +412,7 @@ export class FakturService {
 
     async create(companyId: string, data: any, userId: string) {
         return await prisma.$transaction(async (tx) => {
-            const fakturNumber = data.fakturNumber || await this.generateFakturNumber(companyId);
+            const fakturNumber = data.fakturNumber || await this.generateFakturNumber(companyId, tx);
 
             // Calc defaults
             const amountPaid = Number(data.amountPaid || 0);
@@ -413,8 +435,10 @@ export class FakturService {
             }
 
             // 2. Create Faktur
-            // Exclude non-schema fields
-            const { paymentTerms, taxInclusive, ...cleanData } = data;
+            // Exclude non-schema fields AND fakturNumber (we use our generated one)
+            const { paymentTerms, taxInclusive, fakturNumber: _ignoreFakturNumber, ...cleanData } = data;
+
+            console.log('Creating faktur with number:', fakturNumber, 'for company:', resolvedCompanyId);
 
             const fp = await tx.faktur.create({
                 data: {
@@ -486,6 +510,7 @@ export class FakturService {
                 where: { id },
                 data: {
                     ...data,
+                    companyId: undefined, // Prevent updating companyId
                     fakturDate: data.fakturDate ? new Date(data.fakturDate) : undefined,
                     dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
                     shippingDate: data.shippingDate ? new Date(data.shippingDate) : undefined,

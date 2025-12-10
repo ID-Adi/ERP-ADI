@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Search, Trash2, Edit2, RotateCcw, Calculator } from 'lucide-react';
+import { X, Search, Trash2, Edit2, Calculator } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { cn, formatCurrency } from '@/lib/utils';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -22,7 +22,9 @@ interface LineItem {
     taxAmount: number;
     totalAmount: number;
     warehouseId?: string;
+    warehouseName?: string;
     salespersonId?: string;
+    salespersonName?: string;
     itemId?: string;
 }
 
@@ -62,6 +64,9 @@ export default function ProductDetailModal({
 
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [salespersons, setSalespersons] = useState<any[]>([]);
+    const [showUnitDropdown, setShowUnitDropdown] = useState(false);
+    const [units, setUnits] = useState<string[]>([]);
+    // const units = ['PCS', 'BOX', 'KD', 'UNT', 'SET', 'LSN', 'DOS'];
 
     useEffect(() => {
         const fetchData = async () => {
@@ -71,17 +76,26 @@ export default function ProductDetailModal({
                 // Pass itemId if available to fetch specific stock
                 const itemId = formData.itemId || initialData?.itemId;
 
-                const [whRes, spRes] = await Promise.all([
+                const [whRes, spRes, uRes] = await Promise.all([
                     api.get('/warehouses', { params: { itemId } }),
-                    api.get('/salespersons')
+                    api.get('/salespersons'),
+                    api.get('/units') // Fetch units
                 ]);
                 const whData = whRes.data.data || [];
                 setWarehouses(whData);
                 setSalespersons(spRes.data.data || []);
+                // Assume uRes.data.data is array of objects { name: string, ... }
+                // We map to string array for the dropdown as per current UI
+                const unitData = uRes.data.data || [];
+                setUnits(unitData.map((u: any) => u.name));
 
                 // Set default warehouse if available and not set
                 if (whData.length > 0 && !formData.warehouseId) {
-                    setFormData(prev => ({ ...prev, warehouseId: whData[0].id }));
+                    setFormData(prev => ({
+                        ...prev,
+                        warehouseId: whData[0].id,
+                        warehouseName: whData[0].name
+                    }));
                 }
             } catch (error) {
                 console.error('Failed to fetch master data:', error);
@@ -223,7 +237,7 @@ export default function ProductDetailModal({
                                 type="text"
                                 value={formData.description}
                                 onChange={(e) => handleChange('description', e.target.value)}
-                                className="w-full pl-3 pr-8 py-1.5 border border-warmgray-300 rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                                className="w-full pl-3 pr-8 py-1.5 border border-warmgray-300 rounded focus:outline-none focus:ring-0 focus:border-primary-500 text-sm"
                                 placeholder="Cari atau ketik nama barang..."
                             />
                             <X className="absolute right-2 top-2 h-4 w-4 text-warmgray-400 cursor-pointer hover:text-warmgray-600" onClick={() => handleChange('description', '')} />
@@ -233,30 +247,60 @@ export default function ProductDetailModal({
                     {/* Row 3: Quantity */}
                     <div className="grid grid-cols-12 gap-3 items-center">
                         <label className="col-span-3 text-sm font-medium text-warmgray-700">Kuantitas</label>
-                        <div className="col-span-9 flex gap-2">
-                            <div className="flex-1 relative">
+                        <div className="col-span-9 flex gap-4">
+                            <div className="w-[120px] relative">
                                 <input
                                     type="number"
                                     value={formData.quantity}
-                                    onChange={(e) => handleChange('quantity', parseFloat(e.target.value) || 0)}
-                                    className="w-full pl-3 pr-6 py-1.5 border border-warmgray-300 rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-sm text-right font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    onChange={(e) => handleChange('quantity', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                    onFocus={(e) => { if (formData.quantity === 0) handleChange('quantity', ''); e.target.select(); }}
+                                    onBlur={(e) => { if (e.target.value === '' || isNaN(parseFloat(e.target.value))) handleChange('quantity', 1); }}
+                                    className="w-full pl-3 pr-8 py-1.5 border border-warmgray-300 rounded focus:outline-none focus:ring-0 focus:border-primary-500 text-sm text-right font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 />
-                                <Calculator className="absolute right-2 top-2 h-4 w-4 text-warmgray-400" />
+                                <Calculator className="absolute right-2 top-2 h-4 w-4 text-warmgray-400 pointer-events-none" />
                             </div>
-                            <div className="flex w-40">
+
+                            {/* Unit Dropdown */}
+                            <div className="flex items-center gap-2 flex-1">
+                                <span className="text-sm font-medium text-warmgray-700">Unit</span>
                                 <div className="relative flex-1">
-                                    <span className="absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-warmgray-500 bg-warmgray-50 border-r border-warmgray-300 rounded-l">Unit</span>
-                                    <input
-                                        type="text"
-                                        value={formData.unit}
-                                        onChange={(e) => handleChange('unit', e.target.value)}
-                                        className="w-full pl-10 pr-6 py-1.5 border border-warmgray-300 rounded-l focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-sm text-center"
-                                    />
-                                    <X className="absolute right-1 top-2 h-3.5 w-3.5 text-warmgray-400 cursor-pointer" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowUnitDropdown(!showUnitDropdown)}
+                                        className="w-full flex items-center justify-between px-3 py-1.5 border border-warmgray-300 rounded bg-white hover:bg-warmgray-50 focus:outline-none focus:ring-0 focus:border-primary-500 text-sm text-left"
+                                    >
+                                        <span className="font-medium text-warmgray-900">{formData.unit}</span>
+                                        <Search className="h-4 w-4 text-warmgray-400" />
+                                    </button>
+
+                                    {/* Dropdown Menu */}
+                                    {showUnitDropdown && (
+                                        <>
+                                            <div
+                                                className="fixed inset-0 z-10"
+                                                onClick={() => setShowUnitDropdown(false)}
+                                            />
+                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-warmgray-200 rounded shadow-lg max-h-40 overflow-y-auto z-20">
+                                                {units.map((u) => (
+                                                    <button
+                                                        key={u}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            handleChange('unit', u);
+                                                            setShowUnitDropdown(false);
+                                                        }}
+                                                        className={cn(
+                                                            "w-full text-left px-3 py-2 text-sm hover:bg-warmgray-50 transition-colors",
+                                                            formData.unit === u ? "bg-primary-50 text-primary-700 font-medium" : "text-warmgray-700"
+                                                        )}
+                                                    >
+                                                        {u}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                                <button className="px-2 py-1.5 border border-l-0 border-warmgray-300 rounded-r hover:bg-warmgray-50 bg-warmgray-50 text-warmgray-600">
-                                    <Search className="h-4 w-4" />
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -264,22 +308,19 @@ export default function ProductDetailModal({
                     {/* Row 4: Price */}
                     <div className="grid grid-cols-12 gap-3 items-center">
                         <label className="col-span-3 text-sm font-medium text-warmgray-700">@Harga</label>
-                        <div className="col-span-2">
-                            <button className="flex items-center gap-1.5 px-2 py-1.5 border border-primary-500 rounded text-primary-600 bg-primary-50/50 text-xs font-medium hover:bg-primary-100 transition-colors w-full justify-center">
-                                <RotateCcw className="h-3 w-3" />
-                            </button>
-                        </div>
-                        <div className="col-span-7 flex relative">
+                        <div className="col-span-9 flex relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <span className="text-warmgray-500 text-xs">Rp</span>
                             </div>
                             <input
                                 type="number"
                                 value={formData.unitPrice}
-                                onChange={(e) => handleChange('unitPrice', parseFloat(e.target.value) || 0)}
-                                className="w-full pl-9 pr-6 py-1.5 border border-warmgray-300 rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-sm text-right font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                onChange={(e) => handleChange('unitPrice', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                onFocus={(e) => { if (formData.unitPrice === 0) handleChange('unitPrice', ''); e.target.select(); }}
+                                onBlur={(e) => { if (e.target.value === '' || isNaN(parseFloat(e.target.value))) handleChange('unitPrice', 0); }}
+                                className="w-full pl-9 pr-8 py-1.5 border border-warmgray-300 rounded focus:outline-none focus:ring-0 focus:border-primary-500 text-sm text-right font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
-                            <Calculator className="absolute right-2 top-2 h-4 w-4 text-warmgray-400" />
+                            <Calculator className="absolute right-2 top-2 h-4 w-4 text-warmgray-400 pointer-events-none" />
                         </div>
                     </div>
 
@@ -294,8 +335,10 @@ export default function ProductDetailModal({
                                 <input
                                     type="number"
                                     value={formData.discountPercent}
-                                    onChange={(e) => handleDiscountPercentChange(parseFloat(e.target.value) || 0)}
-                                    className="w-full pl-7 pr-2 py-1.5 border border-warmgray-300 rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-sm text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    onChange={(e) => handleDiscountPercentChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                                    onFocus={(e) => { if (formData.discountPercent === 0) setFormData(prev => ({ ...prev, discountPercent: '' as any })); e.target.select(); }}
+                                    onBlur={(e) => { if (e.target.value === '' || isNaN(parseFloat(e.target.value))) setFormData(prev => ({ ...prev, discountPercent: 0 })); }}
+                                    className="w-full pl-7 pr-2 py-1.5 border border-warmgray-300 rounded focus:outline-none focus:ring-0 focus:border-primary-500 text-sm text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 />
                             </div>
                             <div className="relative flex-1">
@@ -305,8 +348,10 @@ export default function ProductDetailModal({
                                 <input
                                     type="number"
                                     value={formData.discountAmount}
-                                    onChange={(e) => handleDiscountAmountChange(parseFloat(e.target.value) || 0)}
-                                    className="w-full pl-9 pr-6 py-1.5 border border-warmgray-300 rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-sm text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    onChange={(e) => handleDiscountAmountChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                                    onFocus={(e) => { if (formData.discountAmount === 0) setFormData(prev => ({ ...prev, discountAmount: '' as any })); e.target.select(); }}
+                                    onBlur={(e) => { if (e.target.value === '' || isNaN(parseFloat(e.target.value))) setFormData(prev => ({ ...prev, discountAmount: 0 })); }}
+                                    className="w-full pl-9 pr-6 py-1.5 border border-warmgray-300 rounded focus:outline-none focus:ring-0 focus:border-primary-500 text-sm text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 />
                                 <Calculator className="absolute right-2 top-2 h-4 w-4 text-warmgray-400" />
                             </div>
@@ -336,7 +381,14 @@ export default function ProductDetailModal({
                                     description: wh.stock !== undefined ? `Stok: ${wh.stock} ${formData.unit || 'PCS'}` : wh.code
                                 }))}
                                 value={formData.warehouseId}
-                                onChange={(val) => handleChange('warehouseId', val)}
+                                onChange={(val) => {
+                                    const selected = warehouses.find(w => w.id === val);
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        warehouseId: val,
+                                        warehouseName: selected?.name
+                                    }));
+                                }}
                                 placeholder="Pilih Gudang..."
                             />
                         </div>
@@ -349,7 +401,14 @@ export default function ProductDetailModal({
                             <SearchableSelect
                                 options={salespersons.map(sp => ({ value: sp.id, label: sp.name, description: sp.code }))}
                                 value={formData.salespersonId}
-                                onChange={(val) => handleChange('salespersonId', val)}
+                                onChange={(val) => {
+                                    const selected = salespersons.find(s => s.id === val);
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        salespersonId: val,
+                                        salespersonName: selected?.name
+                                    }));
+                                }}
                                 placeholder="Pilih Penjual..."
                             />
                         </div>

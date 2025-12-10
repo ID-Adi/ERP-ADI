@@ -10,7 +10,9 @@ interface InvoiceHistoryViewProps {
     formData: any;
     totals: {
         subtotal: number;
-        discountTotal: number;
+        itemDiscountTotal: number;
+        globalDiscountAmount: number;
+        otherCostsTotal: number;
         taxTotal: number;
         grandTotal: number;
     };

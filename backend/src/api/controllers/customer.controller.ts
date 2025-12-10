@@ -36,6 +36,7 @@ const customerSchema = z.object({
     priceCategory: z.string().optional(),
     discountCategory: z.string().optional(),
     paymentTerms: z.coerce.number().int().optional(),
+    paymentTermId: z.string().optional().or(z.literal('')).transform(v => v === '' ? null : v), // Add paymentTermId
     creditLimit: z.coerce.number().optional(),
     defaultDiscount: z.coerce.number().optional(),
     maxReceivableDays: z.coerce.number().int().optional(),

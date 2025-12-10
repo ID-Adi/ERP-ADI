@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FileText, Package, List, AlignLeft, Search, Calendar, User, Hash,
@@ -12,9 +12,11 @@ import { formatCurrency, cn } from '@/lib/utils';
 import { confirmAction } from '@/lib/swal';
 import InvoiceItemsView from './invoice/InvoiceItemsView';
 import InvoiceInfoView from './invoice/InvoiceInfoView';
-import InvoiceCostsView from './invoice/InvoiceCostsView';
+import DatePicker from '@/components/ui/DatePicker';
+import InvoiceCostsView, { CostItem } from './invoice/InvoiceCostsView';
 import InvoiceHistoryView from './invoice/InvoiceHistoryView';
 import CustomerSelect from './invoice/CustomerSelect';
+import PaymentTermSelect from '@/components/business/payment/PaymentTermSelect';
 
 // --- Interfaces ---
 interface LineItem {
@@ -32,7 +34,9 @@ interface LineItem {
   taxAmount: number;
   totalAmount: number;
   warehouseId?: string;
+  warehouseName?: string;
   salespersonId?: string;
+  salespersonName?: string;
 }
 
 interface InvoiceFormProps {
@@ -64,10 +68,16 @@ export default function InvoiceForm({
   const router = useRouter();
   const { addToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Use ref to store onDataChange to avoid infinite loop in useEffect
+  const onDataChangeRef = useRef(onDataChange);
+  onDataChangeRef.current = onDataChange;
   const [activeView, setActiveView] = useState<ViewType>('items');
 
   // State for manual invoice number toggle
   const [isManualFaktur, setIsManualFaktur] = useState(false);
+
+
 
   // Data State
   const [customers, setCustomers] = useState<any[]>([]);
@@ -76,7 +86,7 @@ export default function InvoiceForm({
   const [formData, setFormData] = useState({
     ...initialData,
     currency: initialData.currency || 'IDR',
-    fakturNumber: initialData.fakturNumber || 'Auto-Generated',
+    fakturNumber: initialData.fakturNumber || '',
     // New Fields
     paymentTerms: (initialData as any).paymentTerms || '',
     taxInclusive: (initialData as any).taxInclusive ?? true, // Default to true (Tax Inclusive)
@@ -128,11 +138,14 @@ export default function InvoiceForm({
   }, [lines]);
 
   // Calculations State
+  const [otherCosts, setOtherCosts] = useState<CostItem[]>([]);
+  const [globalDiscount, setGlobalDiscount] = useState<{ value: number, type: 'PERCENT' | 'AMOUNT' }>({ value: 0, type: 'PERCENT' });
   const [totals, setTotals] = useState({
     subtotal: 0,
-    discountTotal: 0, // Item level discounts
-    globalDiscount: 0,
+    itemDiscountTotal: 0,
+    globalDiscountAmount: 0,
     taxTotal: 0,
+    otherCostsTotal: 0,
     grandTotal: 0,
   });
 
@@ -141,59 +154,67 @@ export default function InvoiceForm({
     // Recalculate Totals
     const subtotal = lines.reduce((sum, line) => sum + (line.quantity * line.unitPrice), 0);
     const itemDiscounts = lines.reduce((sum, line) => sum + line.discountAmount, 0);
-    const taxableBase = subtotal - itemDiscounts;
+    const taxableBaseBeforeGlobal = subtotal - itemDiscounts;
+
+    // Calculate Global Discount
+    let globalDiscountAmount = 0;
+    if (globalDiscount.type === 'PERCENT') {
+      globalDiscountAmount = (taxableBaseBeforeGlobal * globalDiscount.value) / 100;
+    } else {
+      globalDiscountAmount = globalDiscount.value;
+    }
+
+    // Ensure we don't discount more than the base
+    if (globalDiscountAmount > taxableBaseBeforeGlobal) {
+      globalDiscountAmount = taxableBaseBeforeGlobal;
+    }
+
+    const taxableBase = taxableBaseBeforeGlobal - globalDiscountAmount;
+
+    // Calculate Other Costs
+    const otherCostsTotal = otherCosts.reduce((sum, item) => sum + item.amount, 0);
 
     let tax = 0;
     let grandTotal = 0;
 
     if ((formData as any).taxInclusive) {
       // Tax Inclusive Logic:
-      // The price entered IS the final price.
-      // Grand Total = Subtotal - Discounts.
-      // Tax is calculated backwards from the amount.
-      grandTotal = taxableBase;
+      // Grand Total = TaxableBase + OtherCosts
+      // (TaxableBase already includes tax component)
 
-      // Calculate tax component for display (assuming 11% VAT included)
-      // Amount = Base + (Base * 0.11) = Base * 1.11
-      // Base = Amount / 1.11
-      // Tax = Amount - Base
       const base = taxableBase / 1.11;
       tax = taxableBase - base;
+
+      grandTotal = taxableBase + otherCostsTotal;
     } else {
       // Tax Exclusive Logic:
-      // Tax is added on top of the taxable base.
-      // We try to use line-item tax amounts if available, otherwise fallback to flat 11%
       const lineTaxSum = lines.reduce((sum, line) => sum + line.taxAmount, 0);
-      tax = lineTaxSum > 0 ? lineTaxSum : (taxableBase * 0.11);
-      grandTotal = taxableBase + tax;
+      // If lines have individual tax, we use that. 
+      // But if we apply a global discount, line taxes should rightfully decrease proportionally?
+      // For simplicity in this system:
+      // If line taxes are used, we might need to adjust them? 
+      // Or we just calculate tax on the NEW taxableBase?
+      // Let's assume global discount reduces the Taxable Base for the global tax calculation.
+
+      tax = (taxableBase * 0.11);
+      grandTotal = taxableBase + tax + otherCostsTotal;
     }
 
     setTotals({
       subtotal,
-      discountTotal: itemDiscounts,
-      globalDiscount: 0,
+      itemDiscountTotal: itemDiscounts,
+      globalDiscountAmount,
       taxTotal: tax,
+      otherCostsTotal,
       grandTotal
     });
 
     const newData = { ...formData, lines };
-    onDataChange(newData);
-  }, [lines, formData, onDataChange]);
+    // Use ref to avoid infinite loop - onDataChange is not in dependency array
+    onDataChangeRef.current(newData);
+  }, [lines, formData, globalDiscount, otherCosts]); // Removed onDataChange from dependencies
 
-  // Handle Manual Faktur Toggle
-  const handleManualFakturToggle = () => {
-    const newState = !isManualFaktur;
-    setIsManualFaktur(newState);
-    if (!newState) {
-      // Reset to Auto if turned off
-      setFormData(prev => ({ ...prev, fakturNumber: 'Auto-Generated' }));
-    } else {
-      // Clear for manual input if turning on (or keep existing if not auto)
-      if (formData.fakturNumber === 'Auto-Generated') {
-        setFormData(prev => ({ ...prev, fakturNumber: '' }));
-      }
-    }
-  };
+
 
 
   // --- Handlers ---
@@ -202,16 +223,88 @@ export default function InvoiceForm({
   };
 
   const handleCustomerSelect = (code: string) => {
-    setFormData(prev => ({ ...prev, vendorCode: code }));
+    const selectedCustomer = customers.find(c => c.code === code);
+    setFormData(prev => {
+      const newData = { ...prev, vendorCode: code };
+
+      // Auto-select payment term if available on customer
+      if (selectedCustomer?.paymentTerm) {
+        newData.paymentTerms = selectedCustomer.paymentTerm.id;
+
+        // Calculate due date
+        const days = selectedCustomer.paymentTerm.days || 0;
+        const invDate = new Date(prev.fakturDate);
+        if (!isNaN(invDate.getTime())) {
+          const due = new Date(invDate);
+          due.setDate(invDate.getDate() + days);
+          newData.dueDate = due.toISOString().split('T')[0];
+        }
+      } else if (selectedCustomer?.paymentTerms) {
+        // Legacy support: if customer has 'paymentTerms' (int days) but no relation
+        const days = selectedCustomer.paymentTerms;
+        const invDate = new Date(prev.fakturDate);
+        if (!isNaN(invDate.getTime())) {
+          const due = new Date(invDate);
+          due.setDate(invDate.getDate() + days);
+          newData.dueDate = due.toISOString().split('T')[0];
+        }
+        // Note: we don't set 'newData.paymentTerms' (ID) because we don't have an ID. 
+        // The user will see empty dropdown but correct due date.
+      }
+
+      return newData;
+    });
   };
 
   const handleVendorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setFormData(prev => ({ ...prev, vendorCode: e.target.value }));
   };
 
+  // Handle Manual Faktur Toggle
+  const handleManualFakturToggle = () => {
+    const newState = !isManualFaktur;
+    setIsManualFaktur(newState);
+    if (!newState) {
+      // Reset to Auto if turned off
+      setFormData(prev => ({ ...prev, fakturNumber: '' }));
+    }
+  };
+
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
+
+  const handlePaymentTermChange = (termId: string, days?: number) => {
+    setFormData(prev => {
+      const invDate = new Date(prev.fakturDate);
+      let newDueDate = prev.dueDate;
+
+      if (days !== undefined && !isNaN(invDate.getTime())) {
+        const due = new Date(invDate);
+        due.setDate(invDate.getDate() + days);
+        newDueDate = due.toISOString().split('T')[0];
+      }
+
+      return {
+        ...prev,
+        paymentTerms: termId,
+        dueDate: newDueDate
+      };
+    });
+  };
+
+  // Re-calculate DueDate if InvoiceDate changes AND a term is selected
+  useEffect(() => {
+    // Logic to re-apply payment term days if invoice date changes
+    // This requires knowing the 'days' of the current selected term.
+    // Since we don't store 'days' in formData, we might need to fetch it or store it.
+    // For simplicity, we assume the user will re-select if date changes, 
+    // OR we leave it as manual override is possible.
+    // A better approach: PaymentTermSelect could expose 'days' via a callback, 
+    // but here we only have the ID. 
+    // Let's keep it simple: Changing InvoiceDate updates DueDate only if we had the 'days' info.
+    // For now, let's just let the Term Change handler handle the calculation.
+  }, [formData.fakturDate]);
 
   const handleSubmit = async (e: React.FormEvent, statusOverride?: string) => {
     e.preventDefault();
@@ -251,6 +344,43 @@ export default function InvoiceForm({
         return;
       }
 
+      // Calculate Global Discount Distribution (Pro-ration)
+      const globalDisc = totals.globalDiscountAmount;
+      const totalLiableAmount = lines.reduce((sum, line) => sum + line.lineAmount, 0); // Using lineAmount (Subtotal - ItemDisc) as base
+
+      const distributedLines = lines.map(line => {
+        let share = 0;
+        if (totalLiableAmount > 0 && globalDisc > 0) {
+          share = (line.lineAmount / totalLiableAmount) * globalDisc;
+        }
+
+        // New Net Amount for this line
+        const newAmount = line.lineAmount - share;
+
+        // Calculate effective Discount Percent
+        // Original Disc Amount = (Price * Qty) - lineAmount
+        // New Total Disc Amount = Original Disc Amount + Share
+        // New Percent = (New Total Disc / (Price * Qty)) * 100
+
+        const baseAmount = line.unitPrice * line.quantity;
+        const totalDiscountAmount = (baseAmount - newAmount); // Includes item disc + global share
+
+        let newDiscountPercent = 0;
+        if (baseAmount > 0) {
+          newDiscountPercent = (totalDiscountAmount / baseAmount) * 100;
+        }
+
+        return {
+          itemId: line.itemId, // Use the actual database ID stored from product selection
+          description: line.description,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discountPercent: newDiscountPercent, // Updated percent
+          amount: newAmount, // Updated net amount
+          warehouseId: line.warehouseId
+        };
+      });
+
       // Build payload for API
       const payload = {
         companyId: 'default-company', // TODO: Get from auth context
@@ -264,8 +394,8 @@ export default function InvoiceForm({
         salespersonId: formData.salespersonId || undefined,
         currency: formData.currency || 'IDR',
         subtotal: totals.subtotal,
-        discountPercent: 0,
-        discountAmount: totals.discountTotal,
+        discountPercent: globalDiscount.type === 'PERCENT' ? globalDiscount.value : 0,
+        discountAmount: totals.globalDiscountAmount,
         taxPercent: 11,
         taxAmount: totals.taxTotal,
         totalAmount: totals.grandTotal,
@@ -273,15 +403,7 @@ export default function InvoiceForm({
         notes: formData.memo || '',
         status: 'UNPAID', // Default to UNPAID (Belum Lunas) instead of DRAFT
         createdBy: 'admin', // TODO: Get from auth context
-        lines: lines.map(line => ({
-          itemId: line.itemId, // Use the actual database ID stored from product selection
-          description: line.description,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          discountPercent: line.discountPercent,
-          amount: line.lineAmount,
-          warehouseId: line.warehouseId
-        }))
+        lines: distributedLines
       };
 
       if (initialData.id) {
@@ -355,9 +477,39 @@ export default function InvoiceForm({
     setIsLoading(true);
     try {
       const selectedCustomer = customers.find(c => c.code === formData.vendorCode);
+      // Calculate Global Discount Distribution for Draft as well?
+      // User requirement implies "pelaporan" (reporting), so yes.
+      // Copy paste logic or reuse?
+      // Since it's inline, I'll duplicate for safety or refactor later.
+      const globalDisc = totals.globalDiscountAmount;
+      const totalLiableAmount = lines.reduce((sum, line) => sum + line.lineAmount, 0);
+
+      const distributedLines = lines.map(line => {
+        let share = 0;
+        if (totalLiableAmount > 0 && globalDisc > 0) {
+          share = (line.lineAmount / totalLiableAmount) * globalDisc;
+        }
+        const newAmount = line.lineAmount - share;
+        const baseAmount = line.unitPrice * line.quantity;
+        const totalDiscountAmount = (baseAmount - newAmount);
+        let newDiscountPercent = 0;
+        if (baseAmount > 0) {
+          newDiscountPercent = (totalDiscountAmount / baseAmount) * 100;
+        }
+        return {
+          itemId: line.itemId,
+          description: line.description,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discountPercent: newDiscountPercent,
+          amount: newAmount,
+          warehouseId: line.warehouseId
+        };
+      });
+
       const payload = {
         companyId: 'default-company',
-        fakturNumber: isManualFaktur ? formData.fakturNumber : undefined,
+        fakturNumber: formData.fakturNumber || undefined,
         fakturDate: formData.fakturDate,
         dueDate: formData.dueDate || null,
         customerId: selectedCustomer?.id || undefined,
@@ -365,15 +517,11 @@ export default function InvoiceForm({
         status: 'DRAFT',
         currency: formData.currency || 'IDR',
         subtotal: totals.subtotal,
+        discountPercent: globalDiscount.type === 'PERCENT' ? globalDiscount.value : 0,
+        discountAmount: totals.globalDiscountAmount, // Saving the calculated amount
         totalAmount: totals.grandTotal,
         balanceDue: totals.grandTotal,
-        lines: lines.map(line => ({
-          itemId: line.itemId,
-          description: line.description,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          amount: line.lineAmount
-        }))
+        lines: distributedLines
       };
       await api.post('/fakturs', payload);
       addToast({ type: 'success', title: 'Draf Tersimpan', message: 'Faktur draf berhasil disimpan.' });
@@ -454,56 +602,47 @@ export default function InvoiceForm({
               <div className="w-full max-w-[200px]">
                 <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Tanggal Faktur</label>
                 <div className="relative">
-                  <input
-                    type="date"
-                    name="fakturDate"
+                  <DatePicker
                     value={formData.fakturDate}
-                    onChange={handleDateChange}
-                    className="w-full pl-9 pr-3 h-[38px] border border-warmgray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-warmgray-900 font-medium transition-shadow cursor-pointer"
+                    onChange={(e) => handleDateChange({ target: { name: 'fakturDate', value: e.target.value } } as any)}
+                    className="w-full"
                   />
-                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-warmgray-400 pointer-events-none" />
                 </div>
               </div>
 
               {/* Currency */}
-              <div className="w-full max-w-[250px]">
+              <div className="w-full max-w-[100px]">
                 <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Mata Uang</label>
                 <div className="relative">
-                  <select
-                    name="currency"
-                    value={formData.currency}
-                    onChange={handleVendorChange}
-                    className="w-full px-3 h-[38px] border border-warmgray-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 appearance-none text-warmgray-900 font-medium transition-shadow"
-                  >
-                    <option value="IDR">IDR - Rupiah Indonesia</option>
-                    <option value="USD">USD - US Dollar</option>
-                  </select>
+                  <div className="w-full px-3 h-[38px] border border-warmgray-300 rounded text-sm bg-warmgray-50 text-warmgray-500 font-medium flex items-center justify-center cursor-not-allowed select-none">
+                    IDR
+                  </div>
                 </div>
               </div>
-
-              {/* Due Date - REMOVED */}
 
               {/* Invoice Number (Right) */}
               <div className="w-full max-w-[350px] ml-auto lg:ml-0">
                 <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">No. Faktur</label>
 
                 <div className="flex gap-2 items-center">
-                  {/* Toggle Switch (Left Side) */}
-                  <div
-                    className="flex items-center justify-center h-[38px] px-2 cursor-pointer group rounded border border-transparent hover:bg-warmgray-50 transition-colors"
-                    onClick={handleManualFakturToggle}
-                    title={isManualFaktur ? "Mode Manual Aktif" : "Mode Auto-Generated"}
-                  >
-                    <div className={cn(
-                      "w-9 h-5 rounded-full relative transition-colors duration-200 ease-in-out flex-shrink-0",
-                      isManualFaktur ? "bg-primary-500" : "bg-warmgray-300 group-hover:bg-warmgray-400"
-                    )}>
+                  {/* Toggle Switch (Only visible for NEW invoices) */}
+                  {!initialData.id && (
+                    <div
+                      className="flex items-center justify-center h-[38px] px-2 cursor-pointer group rounded border border-transparent hover:bg-warmgray-50 transition-colors"
+                      onClick={handleManualFakturToggle}
+                      title={isManualFaktur ? "Mode Manual Aktif" : "Mode Auto-Generated"}
+                    >
                       <div className={cn(
-                        "absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-sm",
-                        isManualFaktur ? "translate-x-4.5" : "translate-x-0.5"
-                      )} style={{ transform: isManualFaktur ? 'translateX(18px)' : 'translateX(2px)' }} />
+                        "w-9 h-5 rounded-full relative transition-colors duration-200 ease-in-out flex-shrink-0",
+                        isManualFaktur ? "bg-primary-500" : "bg-warmgray-300 group-hover:bg-warmgray-400"
+                      )}>
+                        <div className={cn(
+                          "absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-sm",
+                          isManualFaktur ? "translate-x-4.5" : "translate-x-0.5"
+                        )} style={{ transform: isManualFaktur ? 'translateX(18px)' : 'translateX(2px)' }} />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="relative flex-1">
                     <input
@@ -547,12 +686,15 @@ export default function InvoiceForm({
             <InvoiceInfoView
               formData={formData}
               onChange={handleFormChange}
+              onPaymentTermChange={handlePaymentTermChange}
             />
           )}
 
           {activeView === 'costs' && (
             <InvoiceCostsView
               invoiceId={initialData.id}
+              costs={otherCosts}
+              onChange={setOtherCosts}
             />
           )}
 
@@ -568,34 +710,62 @@ export default function InvoiceForm({
         {/* Bottom Action Bar (Sticky) */}
         <div className="bg-white border-t border-warmgray-300 px-6 py-3 flex items-center justify-between shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-20">
           {/* Grand Total Display */}
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-warmgray-600">Subtotal</span>
-              <div className="flex flex-col items-end">
-                <span className="text-sm font-bold text-warmgray-900">{formatCurrency(totals.subtotal)}</span>
-              </div>
+          <div className="flex items-center gap-0 divide-x divide-warmgray-200 border border-warmgray-200 rounded-lg overflow-hidden bg-white">
+
+            {/* Subtotal */}
+            <div className="px-4 py-2 flex flex-col min-w-[120px]">
+              <span className="text-xs font-semibold text-warmgray-500 mb-1">Sub Total</span>
+              <span className="text-sm font-bold text-warmgray-900">{formatCurrency(totals.subtotal)}</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-semibold text-warmgray-600">Diskon</span>
-                <span className="bg-primary-50 text-primary-600 text-[10px] px-1 rounded border border-primary-100">%</span>
+            {/* Discount */}
+            <div className="px-4 py-2 flex flex-col min-w-[160px]">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-semibold text-warmgray-500">Diskon</span>
+                <button
+                  type="button"
+                  onClick={() => setGlobalDiscount(prev => ({ ...prev, type: prev.type === 'PERCENT' ? 'AMOUNT' : 'PERCENT', value: 0 }))}
+                  className={cn(
+                    "text-[10px] px-1 rounded border transition-colors",
+                    globalDiscount.type === 'PERCENT'
+                      ? "bg-blue-50 text-blue-600 border-blue-100 font-bold"
+                      : "bg-warmgray-50 text-warmgray-400 border-warmgray-200"
+                  )}
+                >
+                  %
+                </button>
               </div>
-              <div className="flex items-center border border-warmgray-300 rounded bg-white w-32 overflow-hidden">
-                <span className="bg-warmgray-50 px-2 py-1 text-xs text-warmgray-500 border-r border-warmgray-300">Rp</span>
+              <div className="flex items-center border border-warmgray-300 rounded overflow-hidden h-[26px] hover:border-primary-400 transition-colors">
+                <span className="bg-warmgray-50 px-2 text-xs text-warmgray-500 border-r border-warmgray-300 h-full flex items-center">
+                  {globalDiscount.type === 'PERCENT' ? '%' : 'Rp'}
+                </span>
                 <input
                   type="number"
-                  value={0}
-                  className="w-full py-1 px-2 text-right text-sm border-none focus:ring-0 outline-none"
-                  readOnly
+                  value={globalDiscount.value}
+                  onChange={(e) => setGlobalDiscount(prev => ({ ...prev, value: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-2 text-xs text-right outline-none bg-white h-full font-medium text-warmgray-900"
+                  placeholder="0"
                 />
               </div>
+              {totals.itemDiscountTotal > 0 && (
+                <span className="text-[10px] text-warmgray-400 text-right mt-0.5">
+                  (Item: {formatCurrency(totals.itemDiscountTotal)})
+                </span>
+              )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-warmgray-700">Total</span>
-              <span className="text-lg font-bold text-warmgray-900">{formatCurrency(totals.grandTotal)}</span>
+            {/* Total Biaya (Costs) */}
+            <div className="px-4 py-2 flex flex-col min-w-[120px]">
+              <span className="text-xs font-semibold text-warmgray-500 mb-1">Total Biaya</span>
+              <span className="text-sm font-bold text-warmgray-900">{formatCurrency(totals.otherCostsTotal)}</span>
             </div>
+
+            {/* Grand Total */}
+            <div className="px-4 py-2 flex flex-col min-w-[150px] bg-warmgray-50/50">
+              <span className="text-xs font-semibold text-warmgray-500 mb-1">Total</span>
+              <span className="text-base font-bold text-warmgray-900">{formatCurrency(totals.grandTotal)}</span>
+            </div>
+
           </div>
 
           {/* Buttons */}

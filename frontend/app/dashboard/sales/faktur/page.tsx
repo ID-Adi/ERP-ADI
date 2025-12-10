@@ -14,7 +14,8 @@ import {
 
   MoreHorizontal,
   Check,
-  X
+  X,
+  Inbox
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -424,8 +425,9 @@ export default function InvoicesPage() {
                 <tr>
                   <td colSpan={8} className="px-4 py-12 text-center text-warmgray-500">
                     <div className="flex flex-col items-center justify-center">
-                      <RefreshCw className="h-8 w-8 mb-2 text-warmgray-300" />
-                      <p>Tidak ada data faktur</p>
+                      <Inbox className="h-12 w-12 mb-3 text-warmgray-200" strokeWidth={1} />
+                      <p className="font-medium text-warmgray-600">Tidak ada data faktur</p>
+                      <p className="text-xs text-warmgray-400 mt-1">Silakan tambah faktur baru atau ubah filter pencarian</p>
                     </div>
                   </td>
                 </tr>

@@ -30,6 +30,10 @@ export default function EditInvoicePage() {
       memo: apiData.notes || '',
       currency: apiData.currency || 'IDR',
       id: apiData.id,
+      salespersonId: apiData.salespersonId || '', // Include invoice-level salesperson
+      paymentTerms: apiData.paymentTerms || '',
+      taxInclusive: apiData.taxInclusive ?? true,
+      shippingDate: apiData.shippingDate?.split('T')[0] || '',
       lines: apiData.lines?.map((line: any) => ({
         id: line.id,
         itemId: line.itemId,
@@ -39,11 +43,16 @@ export default function EditInvoicePage() {
         unit: line.item?.uom || 'PCS',
         unitPrice: Number(line.unitPrice),
         discountPercent: Number(line.discountPercent || 0),
-        discountAmount: Number(line.discountAmount || 0), // Not always present in line, but needed for interface
-        taxPercent: 11, // Default or from line if stored
+        discountAmount: Number(line.discountAmount || 0),
+        taxPercent: 11,
         lineAmount: Number(line.amount),
-        taxAmount: 0, // Recalculated in form usually
-        totalAmount: Number(line.amount) // or calc from qty * price
+        taxAmount: 0,
+        totalAmount: Number(line.amount),
+        // Map warehouse and salesperson data
+        warehouseId: line.warehouseId || '',
+        warehouseName: line.warehouse?.name || '-',
+        salespersonId: apiData.salespersonId || '', // Use invoice-level salesperson for lines
+        salespersonName: apiData.salesperson?.name || '-',
       })) || [],
     };
   };

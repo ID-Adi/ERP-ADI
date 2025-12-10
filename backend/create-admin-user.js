@@ -6,7 +6,12 @@ const prisma = new PrismaClient();
 async function main() {
     const email = 'admin@erp-adi.com';
     const password = 'admin123';
-    const companyId = '88f505c2-eaa9-44f8-b5a1-768e7238a28e'; // Valid company ID
+    // Find first company or throw error
+    const company = await prisma.company.findFirst();
+    if (!company) {
+        throw new Error("No company found! Please run 'npx prisma db seed' first.");
+    }
+    const companyId = company.id;
 
     console.log(`Checking for user: ${email}`);
 

@@ -25,7 +25,9 @@ interface LineItem {
     taxAmount: number;
     totalAmount: number;
     warehouseId?: string;
+    warehouseName?: string;
     salespersonId?: string;
+    salespersonName?: string;
 }
 
 interface InvoiceItemsViewProps {
@@ -336,27 +338,28 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                 <table className="w-full text-xs z-10 relative">
                     <thead className="bg-warmgray-50 sticky top-0 z-20 border-b border-warmgray-200">
                         <tr>
-                            <th className="py-2 px-2 w-[30px] text-center font-semibold text-warmgray-600"></th>
-                            <th className="py-2 px-4 text-left font-semibold text-warmgray-600">Barang & Jasa</th>
-                            <th className="py-2 px-4 text-left font-semibold text-warmgray-600">Kode</th>
-                            <th className="py-2 px-2 w-[70px] text-center font-semibold text-warmgray-600">Kuantitas</th>
-                            <th className="py-2 px-2 w-[70px] text-left font-semibold text-warmgray-600">Satuan</th>
-                            <th className="py-2 px-4 text-right font-semibold text-warmgray-600">Harga Satuan</th>
-                            <th className="py-2 px-2 w-[60px] text-center font-semibold text-warmgray-600">Diskon</th>
-                            <th className="py-2 px-4 text-right font-semibold text-warmgray-600">Total Harga</th>
-                            <th className="py-2 px-2 w-[40px] text-center font-semibold text-warmgray-600"></th>
+                            <th className="py-2 px-2 w-[30px] text-center font-semibold text-warmgray-600 border-r border-warmgray-200"></th>
+                            <th className="py-2 px-4 w-[350px] text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Barang & Jasa</th>
+                            <th className="py-2 px-4 text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Kode</th>
+                            <th className="py-2 px-2 w-[70px] text-center font-semibold text-warmgray-600 border-r border-warmgray-200">Kuantitas</th>
+                            <th className="py-2 px-2 w-[70px] text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Satuan</th>
+                            <th className="py-2 px-4 text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Gudang</th>
+                            <th className="py-2 px-4 w-[120px] text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Sales Person</th>
+                            <th className="py-2 px-4 w-[130px] text-right font-semibold text-warmgray-600 border-r border-warmgray-200">Harga Satuan</th>
+                            <th className="py-2 px-2 w-[60px] text-center font-semibold text-warmgray-600 border-r border-warmgray-200">Diskon</th>
+                            <th className="py-2 px-4 w-[130px] text-right font-semibold text-warmgray-600">Total Harga</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-warmgray-100">
                         {items.length === 0 ? (
                             <tr>
-                                <td colSpan={9} className="py-12 text-center text-warmgray-400 italic">
+                                <td colSpan={10} className="py-12 text-center text-warmgray-400 italic">
                                     Belum ada barang dipilih. Gunakan pencarian di atas untuk menambahkan barang.
                                 </td>
                             </tr>
                         ) : filteredItems.length === 0 ? (
                             <tr>
-                                <td colSpan={9} className="py-12 text-center text-warmgray-400 italic">
+                                <td colSpan={10} className="py-12 text-center text-warmgray-400 italic">
                                     Tidak ada barang yang cocok dengan pencarian &quot;{tableSearch}&quot;.
                                 </td>
                             </tr>
@@ -367,15 +370,16 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                                     className="odd:bg-white even:bg-[#fafafb] hover:bg-primary-50 cursor-pointer transition-colors group"
                                     onClick={() => handleEditItem(item)}
                                 >
-                                    <td className="py-1.5 px-2 text-center text-warmgray-400">=</td>
-                                    <td className="py-1.5 px-3 font-medium text-warmgray-900">{item.description}</td>
-                                    <td className="py-1.5 px-3 text-warmgray-600">{item.itemCode}</td>
-                                    <td className="py-1.5 px-3 text-right text-warmgray-900">{item.quantity}</td>
-                                    <td className="py-1.5 px-3 text-warmgray-600">{item.unit}</td>
-                                    <td className="py-1.5 px-3 text-right text-warmgray-900">{formatCurrency(item.unitPrice).replace('Rp', '')}</td>
-                                    <td className="py-1.5 px-3 text-right text-warmgray-900">{item.discountAmount > 0 ? formatCurrency(item.discountAmount).replace('Rp', '') : '0'}</td>
+                                    <td className="py-1.5 px-2 text-center text-warmgray-400 border-r border-warmgray-100">=</td>
+                                    <td className="py-1.5 px-3 font-medium text-warmgray-900 border-r border-warmgray-100">{item.description}</td>
+                                    <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{item.itemCode}</td>
+                                    <td className="py-1.5 px-3 text-right text-warmgray-900 border-r border-warmgray-100">{item.quantity}</td>
+                                    <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{item.unit}</td>
+                                    <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{item.warehouseName || '-'}</td>
+                                    <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{item.salespersonName || '-'}</td>
+                                    <td className="py-1.5 px-3 text-right text-warmgray-900 border-r border-warmgray-100">{formatCurrency(item.unitPrice).replace('Rp', '')}</td>
+                                    <td className="py-1.5 px-3 text-right text-warmgray-900 border-r border-warmgray-100">{item.discountAmount > 0 ? formatCurrency(item.discountAmount).replace('Rp', '') : '0'}</td>
                                     <td className="py-1.5 px-3 text-right font-medium text-warmgray-900">{formatCurrency(item.totalAmount).replace('Rp', '')}</td>
-                                    <td className="py-1.5 px-3 text-warmgray-600">{item.salespersonId ? 'SC - Santi' : '-'}</td>
                                 </tr>
                             ))
                         )}

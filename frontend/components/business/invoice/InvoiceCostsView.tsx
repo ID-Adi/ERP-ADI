@@ -7,7 +7,7 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import { Button } from '@/components/ui';
 import api from '@/lib/api';
 
-interface CostItem {
+export interface CostItem {
     id: string; // Temporarily just string/UUID
     accountId: string;
     accountCode: string;
@@ -19,17 +19,19 @@ interface CostItem {
 interface InvoiceCostsViewProps {
     invoiceStatus?: string; // 'PAID', 'UNPAID', 'PARTIAL'
     invoiceId?: string;
+    costs: CostItem[];
+    onChange: (costs: CostItem[]) => void;
 }
 
-export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId }: InvoiceCostsViewProps) {
-    const [costs, setCosts] = useState<CostItem[]>([]);
+export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId, costs, onChange }: InvoiceCostsViewProps) {
+    // const [costs, setCosts] = useState<CostItem[]>([]); // Lifted to parent
     const [accounts, setAccounts] = useState<any[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [calculatedStatus, setCalculatedStatus] = useState<string>('UNPAID');
 
     // Selected Account for changing costs
     const [selectedAccount, setSelectedAccount] = useState<any>(null);
-    const [amountInput, setAmountInput] = useState<number>(0);
+    const [amountInput, setAmountInput] = useState<number | ''>(0);
     const [notesInput, setNotesInput] = useState<string>('');
     const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -80,8 +82,8 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId }
 
             try {
                 const types = [
-                    'OTHER_CURRENT_ASSET',
-                    'CURRENT_LIABILITY',
+                    'OTHER_CURRENT_ASSETS',
+                    'OTHER_CURRENT_LIABILITIES',
                     'REVENUE',
                     'COGS',
                     'EXPENSE',
@@ -112,10 +114,12 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId }
     const handleSaveCost = () => {
         if (!selectedAccount) return;
 
+        const finalAmount = amountInput === '' ? 0 : amountInput;
+
         if (editingId) {
-            setCosts(prev => prev.map(c => c.id === editingId ? {
+            onChange(costs.map(c => c.id === editingId ? {
                 ...c,
-                amount: amountInput,
+                amount: finalAmount,
                 notes: notesInput
             } : c));
         } else {
@@ -124,10 +128,10 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId }
                 accountId: selectedAccount.id,
                 accountCode: selectedAccount.code,
                 accountName: selectedAccount.name,
-                amount: amountInput,
+                amount: finalAmount,
                 notes: notesInput
             };
-            setCosts(prev => [...prev, newCost]);
+            onChange([...costs, newCost]);
         }
         setIsModalOpen(false);
         setSelectedAccount(null);
@@ -144,7 +148,7 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId }
     };
 
     const handleDelete = (id: string) => {
-        setCosts(prev => prev.filter(c => c.id !== id));
+        onChange(costs.filter(c => c.id !== id));
     };
 
     const isPaid = invoiceStatus === 'PAID' || invoiceStatus === 'LUNAS' || calculatedStatus === 'LUNAS';
@@ -183,14 +187,14 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId }
                 )}
 
                 <table className="w-full text-xs z-10 relative">
-                    <thead className="bg-[#4a5f75] text-white">
+                    <thead className="bg-warmgray-50 border-b border-warmgray-200 text-warmgray-600 font-semibold">
                         <tr>
-                            <th className="w-12 py-2 text-center border-r border-[#5b738b] rounded-tl-lg">
+                            <th className="w-12 py-2 text-center border-r border-warmgray-200">
                                 <MoreHorizontal className="h-3 w-3 mx-auto" />
                             </th>
-                            <th className="py-2 px-3 text-left border-r border-[#5b738b]">Nama Biaya</th>
-                            <th className="py-2 px-3 text-center border-r border-[#5b738b] w-32">Kode #</th>
-                            <th className="py-2 px-3 text-right w-32 rounded-tr-lg">Jumlah</th>
+                            <th className="py-2 px-3 text-left border-r border-warmgray-200">Nama Biaya</th>
+                            <th className="py-2 px-3 text-center border-r border-warmgray-200 w-32">Kode #</th>
+                            <th className="py-2 px-3 text-right w-32">Jumlah</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-warmgray-100">
@@ -226,7 +230,7 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId }
 
             {/* Cost Detail Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden transform transition-all scale-100">
                         <div className="flex justify-between items-center bg-[#1e293b] px-4 py-3 text-white">
                             <h3 className="font-semibold text-sm flex items-center gap-2">
@@ -268,8 +272,13 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId }
                                     <input
                                         type="number"
                                         value={amountInput}
-                                        onChange={(e) => setAmountInput(Number(e.target.value))}
-                                        className="w-full pl-9 pr-3 py-2 border border-warmgray-300 rounded text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-right font-medium"
+                                        onFocus={(e) => e.target.value === '0' && setAmountInput('')}
+                                        onBlur={(e) => e.target.value === '' && setAmountInput(0)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setAmountInput(val === '' ? '' : Number(val));
+                                        }}
+                                        className="w-full pl-9 pr-3 py-2 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 text-right font-medium transition-shadow"
                                         autoFocus
                                     />
                                 </div>
@@ -282,7 +291,7 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId }
                                 <textarea
                                     value={notesInput}
                                     onChange={(e) => setNotesInput(e.target.value)}
-                                    className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                    className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 transition-shadow"
                                     rows={2}
                                 />
                             </div>
@@ -290,17 +299,17 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId }
 
                         <div className="bg-warmgray-50 px-6 py-3 flex justify-end gap-3 border-t border-warmgray-200">
                             <Button
-                                variant="outline"
+                                variant="secondary"
                                 onClick={() => setIsModalOpen(false)}
-                                className="text-xs"
+                                className="bg-warmgray-200 hover:bg-warmgray-300 text-warmgray-800 border-none font-semibold text-xs"
                             >
                                 Batal
                             </Button>
                             <Button
                                 variant="primary"
                                 onClick={handleSaveCost}
-                                disabled={amountInput <= 0}
-                                className="text-xs bg-primary-600 hover:bg-primary-700"
+                                disabled={Number(amountInput || 0) <= 0}
+                                className="bg-[#d95d39] hover:bg-[#c44e2b] text-white border-none font-semibold shadow-md text-xs"
                             >
                                 Lanjut
                             </Button>

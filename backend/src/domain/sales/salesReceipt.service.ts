@@ -125,6 +125,138 @@ export class SalesReceiptService {
         });
     }
 
+    async update(id: string, data: any, userId: string) {
+        return await prisma.$transaction(async (tx) => {
+            const receipt = await tx.salesReceipt.findUnique({
+                where: { id },
+                include: { lines: true }
+            });
+
+            if (!receipt) throw new Error("Receipt not found");
+
+            // 1. REVERT: Reverse Invoices impact
+            for (const line of receipt.lines) {
+                if (!line.fakturId) continue;
+                const faktur = await tx.faktur.findUnique({ where: { id: line.fakturId } });
+                if (faktur) {
+                    const newAmountPaid = Number(faktur.amountPaid) - Number(line.amount);
+                    const newBalanceDue = Number(faktur.totalAmount) - newAmountPaid;
+                    let newStatus: FakturStatus = 'PARTIAL';
+                    if (newAmountPaid <= 0) newStatus = 'UNPAID';
+
+                    await tx.faktur.update({
+                        where: { id: line.fakturId },
+                        data: {
+                            amountPaid: newAmountPaid,
+                            balanceDue: newBalanceDue,
+                            status: newStatus
+                        }
+                    });
+                }
+            }
+
+            // 2. REVERT: Delete Journal Entry
+            // Find Journal Entry by sourceId
+            const je = await tx.journalEntry.findFirst({
+                where: {
+                    sourceId: id,
+                    sourceType: 'SALES_RECEIPT'
+                }
+            });
+            if (je) {
+                // Delete lines first (cascade usually handles this but safety first)
+                await tx.journalLine.deleteMany({ where: { journalId: je.id } });
+                await tx.journalEntry.delete({ where: { id: je.id } });
+            }
+
+            // 3. APPLY NEW HEADER
+            const updatedReceipt = await tx.salesReceipt.update({
+                where: { id },
+                data: {
+                    receiptDate: new Date(data.receiptDate),
+                    customerId: data.customerId,
+                    bankAccountId: data.bankAccountId,
+                    amount: data.amount,
+                    notes: data.notes,
+                    // status: 'POSTED', // Assume keeping it POSTED or whatever passed
+                }
+            });
+
+            // 4. RESET LINES
+            await tx.salesReceiptLine.deleteMany({ where: { salesReceiptId: id } });
+
+            // 5. CREATE NEW LINES
+            await tx.salesReceiptLine.createMany({
+                data: data.lines.map((line: any) => ({
+                    salesReceiptId: id,
+                    fakturId: line.fakturId,
+                    amount: line.amount
+                }))
+            });
+
+            // 6. APPLY NEW: Update Invoices (Faktur)
+            for (const line of data.lines) {
+                const faktur = await tx.faktur.findUnique({ where: { id: line.fakturId } });
+                if (!faktur) throw new Error(`Faktur not found: ${line.fakturId}`);
+
+                const newAmountPaid = Number(faktur.amountPaid) + Number(line.amount);
+                const newBalanceDue = Number(faktur.totalAmount) - newAmountPaid;
+
+                let newStatus: FakturStatus = faktur.status;
+                if (newBalanceDue <= 0) newStatus = 'PAID';
+                else if (newAmountPaid > 0) newStatus = 'PARTIAL';
+
+                await tx.faktur.update({
+                    where: { id: line.fakturId },
+                    data: {
+                        amountPaid: newAmountPaid,
+                        balanceDue: newBalanceDue,
+                        status: newStatus
+                    }
+                });
+            }
+
+            // 7. APPLY NEW: Create Journal Entry
+            const customer = await tx.customer.findUnique({ where: { id: data.customerId } });
+            const arAccountId = customer?.receivableAccountId;
+            const bankAccount = await tx.account.findUnique({ where: { id: data.bankAccountId } }); // Need bank name
+
+            if (!arAccountId) {
+                throw new Error("Customer does not have a linked Receivable Account (Piutang). Please configure it first.");
+            }
+
+            await tx.journalEntry.create({
+                data: {
+                    companyId: receipt.companyId,
+                    transactionDate: updatedReceipt.receiptDate,
+                    transactionNo: updatedReceipt.receiptNumber,
+                    reference: updatedReceipt.receiptNumber,
+                    sourceType: 'SALES_RECEIPT',
+                    sourceId: updatedReceipt.id,
+                    description: `Receipt from ${customer?.name} - ${updatedReceipt.notes || ''}`,
+                    lines: {
+                        create: [
+                            {
+                                accountId: data.bankAccountId, // DEBIT Bank
+                                description: `Payment to ${bankAccount?.name || 'Bank'}`,
+                                debit: Number(data.amount),
+                                credit: 0
+                            },
+                            {
+                                accountId: arAccountId, // CREDIT Piutang
+                                description: `Payment from ${customer?.name}`,
+                                debit: 0,
+                                credit: Number(data.amount)
+                            }
+                        ]
+                    }
+                }
+            });
+
+            return updatedReceipt;
+        });
+    }
+
 
 
     async delete(id: string, userId: string) {
@@ -135,7 +267,6 @@ export class SalesReceiptService {
             });
 
             if (!receipt) throw new Error("Receipt not found");
-            if (receipt.status === 'CANCELLED') throw new Error("Receipt already cancelled");
 
             // 1. Reverse Invoices
             for (const line of receipt.lines) {
@@ -161,45 +292,23 @@ export class SalesReceiptService {
                 }
             }
 
-            // 2. Reverse Journal Entry
-            // We create a new Journal Entry that reverses the original one.
-            const customer = receipt.customer;
-            const arAccountId = customer?.receivableAccountId;
-
-            if (arAccountId) {
-                await tx.journalEntry.create({
-                    data: {
-                        companyId: receipt.companyId,
-                        transactionDate: new Date(), // Reversal date is NOW
-                        transactionNo: `${receipt.receiptNumber}-REV`,
-                        reference: receipt.receiptNumber,
-                        sourceType: 'SALES_RECEIPT_VOID',
-                        sourceId: receipt.id,
-                        description: `VOID Receipt ${receipt.receiptNumber}`,
-                        lines: {
-                            create: [
-                                {
-                                    accountId: receipt.bankAccountId, // CREDIT Bank (Reversal)
-                                    description: `VOID Payment to ${receipt.bankAccount?.name}`,
-                                    debit: 0,
-                                    credit: Number(receipt.amount)
-                                },
-                                {
-                                    accountId: arAccountId, // DEBIT Piutang (Reversal)
-                                    description: `VOID Payment from ${customer?.name}`,
-                                    debit: Number(receipt.amount),
-                                    credit: 0
-                                }
-                            ]
-                        }
-                    }
-                });
+            // 2. Hard Delete Journal Entry
+            const je = await tx.journalEntry.findFirst({
+                where: {
+                    sourceId: id,
+                    sourceType: 'SALES_RECEIPT'
+                }
+            });
+            if (je) {
+                await tx.journalLine.deleteMany({ where: { journalId: je.id } });
+                await tx.journalEntry.delete({ where: { id: je.id } });
             }
 
-            // 3. Mark Receipt as Cancelled
-            return await tx.salesReceipt.update({
-                where: { id },
-                data: { status: 'CANCELLED' }
+            // 3. Hard Delete Receipt
+            // Delete lines first if not cascaded
+            await tx.salesReceiptLine.deleteMany({ where: { salesReceiptId: id } });
+            return await tx.salesReceipt.delete({
+                where: { id }
             });
         });
     }

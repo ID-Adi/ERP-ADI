@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, ChevronDown, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +22,9 @@ export default function CustomerSelect({ value, onChange, customers, placeholder
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const wrapperRef = useRef<HTMLDivElement>(null);
+    // Use ref to store customers to avoid dependency issues
+    const customersRef = useRef<Customer[]>(customers);
+    customersRef.current = customers;
 
     // Close when clicking outside
     useEffect(() => {
@@ -34,16 +37,17 @@ export default function CustomerSelect({ value, onChange, customers, placeholder
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // Update internal search query when value changes externaly or selected
+    // Update internal search query when value changes externally or selected
+    // Using customersRef to avoid infinite loop from customers dependency
     useEffect(() => {
-        const selected = customers.find(c => c.code === value);
+        const selected = customersRef.current.find(c => c.code === value);
         if (selected) {
             // Only update if not open to avoid disrupting typing
             if (!isOpen) setSearchQuery(selected.name);
         } else {
             if (!isOpen) setSearchQuery('');
         }
-    }, [value, customers, isOpen]);
+    }, [value, isOpen]); // Removed 'customers' from dependency - using ref instead
 
     const filteredCustomers = customers.filter(c =>
         c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

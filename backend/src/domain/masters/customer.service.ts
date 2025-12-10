@@ -27,6 +27,7 @@ export class CustomerService extends BaseService<Customer> {
             salesReturnAccountId,
             goodsDiscountAccountId,
             salesDiscountAccountId,
+            paymentTermId, // Extract paymentTermId
             ...restData
         } = data;
 
@@ -58,6 +59,9 @@ export class CustomerService extends BaseService<Customer> {
         if (salesDiscountAccountId) {
             createData.salesDiscountAccount = { connect: { id: salesDiscountAccountId } };
         }
+        if (paymentTermId) {
+            createData.paymentTerm = { connect: { id: paymentTermId } };
+        }
 
         return this.repository.create(createData);
     }
@@ -85,6 +89,7 @@ export class CustomerService extends BaseService<Customer> {
             salesReturnAccountId,
             goodsDiscountAccountId,
             salesDiscountAccountId,
+            paymentTermId,
             ...restData
         } = data;
 
@@ -110,6 +115,7 @@ export class CustomerService extends BaseService<Customer> {
         handleRelation(salesReturnAccountId, 'salesReturnAccount');
         handleRelation(goodsDiscountAccountId, 'goodsDiscountAccount');
         handleRelation(salesDiscountAccountId, 'salesDiscountAccount');
+        handleRelation(paymentTermId, 'paymentTerm');
 
         return this.repository.update(id, updateData);
     }

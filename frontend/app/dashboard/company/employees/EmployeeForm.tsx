@@ -48,7 +48,7 @@ interface EmployeeFormProps {
 }
 
 export default function EmployeeForm({ initialData, onCancel }: EmployeeFormProps) {
-      const isEdit = !!initialData;
+      const isEdit = !!initialData?.id;
       const [submitting, setSubmitting] = useState(false);
       const [activeTab, setActiveTab] = useState('karyawan');
 

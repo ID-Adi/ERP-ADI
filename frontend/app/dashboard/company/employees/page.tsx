@@ -52,11 +52,11 @@ export default function EmployeesPage() {
             openDataTab(featureId, {
                   id: tabId,
                   title: employee.fullName,
-                  href: featureId
+                  href: featureId,
+                  data: employee // Pass data directly during creation
             });
-            // We need to update the data in the context so it can be retrieved.
-            // Assuming we have access to updateDataTabData from useTabContext
-            updateDataTabData(featureId, tabId, employee);
+            // updateDataTabData is no longer needed here as we passed data in openDataTab
+            // updateDataTabData(featureId, tabId, employee);
       };
 
       // And in the render:

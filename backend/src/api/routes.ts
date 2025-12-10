@@ -14,6 +14,8 @@ import salesReceiptRoutes from './controllers/salesReceipt.controller';
 import salespersonRoutes from './controllers/salesperson.controller';
 import employeeRoutes from './controllers/employee.controller';
 
+import paymentTermRoutes from './controllers/paymentTerm.routes';
+
 const router = Router();
 
 router.get('/', (req, res) => {
@@ -33,5 +35,6 @@ router.use('/warehouses', warehouseRoutes);
 router.use('/sales-receipts', salesReceiptRoutes);
 router.use('/salespersons', salespersonRoutes);
 router.use('/employees', employeeRoutes);
+router.use('/payment-terms', paymentTermRoutes);
 
 export default router;

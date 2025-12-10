@@ -582,7 +582,7 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                 const [unitsRes, categoriesRes, accountsRes, warehousesRes] = await Promise.all([
                     api.get('/units'),
                     api.get('/categories'),
-                    api.get('/accounts'),
+                    api.get('/accounts', { params: { limit: 1000 } }),
                     api.get('/warehouses')
                 ]);
 
@@ -595,12 +595,57 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                 setCategories(Array.isArray(categoriesData) ? categoriesData : []);
                 setAccountList(Array.isArray(accountsData) ? accountsData : []);
                 setWarehouses(Array.isArray(warehousesData) ? warehousesData : []);
+
+                // Auto-populate defaults for new items
+                if (!isEdit && Array.isArray(accountsData)) {
+                    const defaults: any = {};
+                    const findAcc = (code: string) => accountsData.find((a: any) => a.code === code || a.code.startsWith(code));
+
+                    // 1. Persediaan -> [110401] Persediaan
+                    const accPersediaan = findAcc('110401');
+                    if (accPersediaan) defaults.persediaan = accPersediaan.id;
+
+                    // 2. Penjualan -> [400001] Penjualan
+                    const accPenjualan = findAcc('400001');
+                    if (accPenjualan) defaults.penjualan = accPenjualan.id;
+
+                    // 3. Retur Penjualan -> [400003] Retur Penjualan
+                    const accReturPenjualan = findAcc('400003');
+                    if (accReturPenjualan) defaults.returPenjualan = accReturPenjualan.id;
+
+                    // 4. Diskon Penjualan -> [400004] Diskon Penjualan
+                    const accDiskonPenjualan = findAcc('400004');
+                    if (accDiskonPenjualan) defaults.diskonPenjualan = accDiskonPenjualan.id;
+
+                    // 5. Barang Terkirim -> [110402] Persediaan Terkirim
+                    const accBarangTerkirim = findAcc('110402');
+                    if (accBarangTerkirim) defaults.barangTerkirim = accBarangTerkirim.id;
+
+                    // 6. Beban Pokok Penjualan -> [5101] Beban Pokok Penjualan
+                    const accCOGS = findAcc('5101');
+                    if (accCOGS) defaults.bebanPokokPenjualan = accCOGS.id;
+
+                    // 7. Retur Pembelian -> [110401] Persediaan (Same as Inventory)
+                    if (accPersediaan) defaults.returPembelian = accPersediaan.id;
+
+                    // 8. Pembelian Belum Tertagih -> [210203] Hutang Pembelian Belum Ditagih
+                    const accPembelianBelumTertagih = findAcc('210203');
+                    if (accPembelianBelumTertagih) defaults.pembelianBelumTertagih = accPembelianBelumTertagih.id;
+
+                    if (Object.keys(defaults).length > 0) {
+                        setFormData(prev => ({
+                            ...prev,
+                            accounts: { ...prev.accounts, ...defaults }
+                        }));
+                    }
+                }
+
             } catch (error) {
                 console.error('Failed to fetch data:', error);
             }
         };
         fetchData();
-    }, []);
+    }, [isEdit]);
 
     return (
         <div className="flex flex-col h-full bg-surface-50">

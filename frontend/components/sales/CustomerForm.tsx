@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Save,
     Trash2,
@@ -10,11 +11,48 @@ import {
     CreditCard,
     FileText,
     User,
-    Book
+    Book,
+    X,
+    Printer,
+    Paperclip,
+    Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { confirmAction, showSuccess, showError } from '@/lib/swal';
+import PaymentTermSelect from '@/components/business/payment/PaymentTermSelect';
+import SearchableSelect from '@/components/ui/SearchableSelect';
+
+function Tooltip({ children, text }: { children: React.ReactNode, text: string }) {
+    const [show, setShow] = useState(false);
+    const [pos, setPos] = useState({ top: 0, left: 0 });
+
+    const handleMouseEnter = (e: React.MouseEvent) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setPos({
+            top: rect.top - 8,
+            left: rect.left + rect.width / 2
+        });
+        setShow(true);
+    };
+
+    return (
+        <>
+            <div onMouseEnter={handleMouseEnter} onMouseLeave={() => setShow(false)} className="flex">
+                {children}
+            </div>
+            {show && typeof document !== 'undefined' && createPortal(
+                <div
+                    className="fixed px-2 py-1 text-xs text-white bg-gray-800 rounded pointer-events-none z-[9999] -translate-x-1/2 -translate-y-full whitespace-nowrap shadow-sm"
+                    style={{ top: pos.top, left: pos.left }}
+                >
+                    {text}
+                </div>,
+                document.body
+            )}
+        </>
+    )
+}
 
 interface CustomerFormProps {
     tabId: string;
@@ -76,6 +114,7 @@ export default function CustomerForm({
         priceCategory: savedData?.priceCategory ?? (initialData?.priceCategory || 'RETAIL'),
         discountCategory: savedData?.discountCategory ?? (initialData?.discountCategory || ''),
         paymentTerms: savedData?.paymentTerms ?? (initialData?.paymentTerms || 0),
+        paymentTermId: savedData?.paymentTermId ?? (initialData?.paymentTermId || ''), // New field
         creditLimit: savedData?.creditLimit ?? (initialData?.creditLimit || 0),
         maxReceivableDays: savedData?.maxReceivableDays ?? (initialData?.maxReceivableDays || 0),
         salesperson: savedData?.salesperson ?? (initialData?.salesperson || ''),
@@ -107,12 +146,71 @@ export default function CustomerForm({
                 const response = await api.get('/accounts', { params: { limit: 1000 } });
                 const data = response.data.data || response.data || [];
                 setAccounts(data);
+
+                // Auto-fill defaults if not set and it's a new entry (or fields are empty)
+                if (!isEdit && data.length > 0) {
+                    setFormData(prev => {
+                        const updates: any = {};
+
+                        // Helper to find account by code (starts with) or type
+                        // Note: Real logic depends on how 'type' is returned. Assuming 'type' field exists.
+                        // If standard seed used: 
+                        // ACCOUNTS_RECEIVABLE -> Piutang
+                        // REVENUE -> Penjualan
+                        // COGS -> Beban Pokok
+
+                        // 1. Piutang (Receivable) - Type: ACCOUNTS_RECEIVABLE
+                        if (!prev.receivableAccountId) {
+                            const acc = data.find((a: any) => a.type === 'ACCOUNTS_RECEIVABLE');
+                            if (acc) updates.receivableAccountId = acc.id;
+                        }
+
+                        // 2. Sales (Revenue) - Type: REVENUE. Prefer 'Penjualan Barang' or code 4-Something
+                        if (!prev.salesAccountId) {
+                            // Find 'Penjualan' in name or type REVENUE
+                            const acc = data.find((a: any) => a.type === 'REVENUE' && a.name.includes('Penjualan'));
+                            if (acc) updates.salesAccountId = acc.id;
+                        }
+
+                        // 3. COGS - Type: COGS
+                        if (!prev.cogsAccountId) {
+                            const acc = data.find((a: any) => a.type === 'COGS');
+                            if (acc) updates.cogsAccountId = acc.id;
+                        }
+
+                        // 4. Sales Return - Type: SALES_RETURN (if exists) or REVENUE
+                        if (!prev.salesReturnAccountId) {
+                            const acc = data.find((a: any) => a.name.toLowerCase().includes('retur penjualan'));
+                            if (acc) updates.salesReturnAccountId = acc.id;
+                        }
+
+                        // 5. Sales Discount - Type: SALES_DISCOUNT or REVENUE/EXPENSE
+                        if (!prev.salesDiscountAccountId) {
+                            const acc = data.find((a: any) => a.name.toLowerCase().includes('diskon penjualan'));
+                            if (acc) updates.salesDiscountAccountId = acc.id;
+                        }
+
+                        // 6. Goods Discount - maybe same as sales discount or separate
+                        if (!prev.goodsDiscountAccountId) {
+                            // Optional: skip or set same as sales discount
+                        }
+
+                        // 7. Down Payment - Liability
+                        if (!prev.downPaymentAccountId) {
+                            const acc = data.find((a: any) => a.name.toLowerCase().includes('uang muka') || a.name.toLowerCase().includes('deposit'));
+                            if (acc) updates.downPaymentAccountId = acc.id;
+                        }
+
+                        return { ...prev, ...updates };
+                    });
+                }
+
             } catch (err) {
                 console.error('Failed to fetch accounts', err);
             }
         };
         fetchAccounts();
-    }, []);
+    }, [isEdit]);
 
     // Sync to TabContext
     useEffect(() => {
@@ -178,10 +276,10 @@ export default function CustomerForm({
             <button
                 onClick={() => setActiveTab(id)}
                 className={cn(
-                    "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                    "flex items-center gap-2 px-4 py-2 text-sm font-medium border-t border-x rounded-t-lg transition-colors relative top-[1px]",
                     activeTab === id
-                        ? "border-primary-600 text-primary-600"
-                        : "border-transparent text-warmgray-500 hover:text-warmgray-700 hover:border-warmgray-300"
+                        ? "bg-white border-surface-200 text-warmgray-900 border-b-white z-10"
+                        : "bg-surface-200 border-transparent text-warmgray-500 hover:text-warmgray-700"
                 )}
             >
                 <Icon className="h-4 w-4" />
@@ -190,62 +288,79 @@ export default function CustomerForm({
         );
     };
 
-    const AccountSelect = ({ label, field, value }: any) => (
-        <div>
-            <label className="block text-sm font-medium text-warmgray-700 mb-1">{label}</label>
-            <select
-                value={value || ''}
-                onChange={(e) => handleChange(field, e.target.value)}
-                className="w-full px-3 py-2 border border-surface-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
-            >
-                <option value="">-- Pilih Akun --</option>
-                {accounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>
-                        {acc.code} - {acc.name}
-                    </option>
-                ))}
-            </select>
-        </div>
-    );
+    const AccountSelect = ({ label, field, value }: any) => {
+        const options = accounts.map(acc => ({
+            value: acc.id,
+            label: acc.name,
+            description: acc.code
+        }));
+
+        return (
+            <SearchableSelect
+                label={label}
+                value={value}
+                onChange={(val) => handleChange(field, val)}
+                options={options}
+                placeholder="-- Pilih Akun --"
+            />
+        );
+    };
 
     return (
         <div className="flex flex-col h-full bg-white">
-            {/* Toolbar */}
-            <div className="flex items-center justify-between px-4 py-2 bg-surface-50 border-b border-surface-200 flex-none">
+            {/* Header / Toolbar */}
+            <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-surface-200 flex-none relative z-50">
                 <div className="flex items-center gap-2">
-                    <button onClick={onCancel} className="p-1 hover:bg-surface-200 rounded text-warmgray-600">
-                        <ArrowLeft className="h-5 w-5" />
-                    </button>
-                    <span className="font-semibold text-warmgray-800">
-                        {isEdit ? `Edit: ${initialData.name}` : 'Pelanggan Baru'}
-                    </span>
+                    <div className="flex items-center gap-1 bg-surface-100 rounded-t-lg px-4 py-2 border-t border-x border-surface-200 -mb-[13px] z-10 relative bg-white">
+                        <span className="text-sm font-medium text-warmgray-900">
+                            {isEdit ? `Edit: ${initialData.name}` : 'Pelanggan Baru'}
+                        </span>
+                        <button onClick={onCancel} className="ml-2 text-warmgray-400 hover:text-warmgray-600">
+                            <X className="h-3 w-3" />
+                        </button>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={onCancel} className="px-3 py-1.5 text-sm text-warmgray-600 hover:bg-surface-100 rounded border border-transparent">
-                        Batal
-                    </button>
                     {isEdit && (
-                        <button
-                            onClick={handleDelete}
-                            disabled={deleting}
-                            className="px-3 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded flex items-center gap-2"
-                        >
-                            <Trash2 className="h-3 w-3" /> Hapus
-                        </button>
+                        <Tooltip text="Hapus">
+                            <button
+                                onClick={handleDelete}
+                                disabled={deleting}
+                                className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded shadow-sm border border-red-200"
+                            >
+                                {deleting ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+                            </button>
+                        </Tooltip>
                     )}
-                    <button
-                        onClick={handleSubmit}
-                        disabled={submitting}
-                        className="px-3 py-1.5 text-sm text-white bg-primary-600 hover:bg-primary-700 rounded flex items-center gap-2"
-                    >
-                        {submitting && <RefreshCw className="h-3 w-3 animate-spin" />}
-                        <Save className="h-3 w-3" /> Simpan
-                    </button>
+                    <Tooltip text="Simpan">
+                        <button
+                            onClick={handleSubmit}
+                            disabled={submitting}
+                            className="p-2 bg-primary-600 hover:bg-primary-700 text-white rounded shadow-sm"
+                        >
+                            {submitting ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                        </button>
+                    </Tooltip>
+                    <Tooltip text="Cetak">
+                        <button className="p-2 bg-primary-100 hover:bg-primary-200 text-primary-700 rounded shadow-sm border border-primary-200">
+                            <Printer className="h-5 w-5" />
+                        </button>
+                    </Tooltip>
+                    <Tooltip text="Lampiran">
+                        <button className="p-2 bg-primary-100 hover:bg-primary-200 text-primary-700 rounded shadow-sm border border-primary-200">
+                            <Paperclip className="h-5 w-5" />
+                        </button>
+                    </Tooltip>
+                    <Tooltip text="Pengaturan">
+                        <button className="p-2 bg-primary-100 hover:bg-primary-200 text-primary-700 rounded shadow-sm border border-primary-200">
+                            <Settings className="h-5 w-5" />
+                        </button>
+                    </Tooltip>
                 </div>
             </div>
 
             {/* Tabs Header */}
-            <div className="flex px-4 border-b border-surface-200 bg-white sticky top-0 z-10">
+            <div className="flex px-4 pt-4 bg-surface-100 border-b border-surface-200 flex-none">
                 {renderTabButton('general', 'Informasi Umum', User)}
                 {renderTabButton('address', 'Alamat', MapPin)}
                 {renderTabButton('sales', 'Penjualan', CreditCard)}
@@ -498,14 +613,21 @@ export default function CustomerForm({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-warmgray-700 mb-1">Syarat Pembayaran (Hari)</label>
-                                    <input
-                                        type="number"
-                                        value={formData.paymentTerms}
-                                        onChange={(e) => handleChange('paymentTerms', parseInt(e.target.value) || 0)}
-                                        className="w-full px-3 py-2 border border-surface-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                                    <label className="block text-sm font-medium text-warmgray-700 mb-1">Syarat Pembayaran</label>
+                                    <PaymentTermSelect
+                                        value={formData.paymentTermId}
+                                        onChange={(id, days) => {
+                                            handleChange('paymentTermId', id);
+                                            // Also update legacy field for backward compatibility if needed, 
+                                            // or just use it for display if 'days' is passed.
+                                            // But the backend expects 'paymentTermId' now primarily?
+                                            // Actually backend still has paymentTerms (Int). 
+                                            // Let's keep both in sync if possible, or just rely on ID.
+                                            // For now, let's sync days to legacy field to be safe.
+                                            if (days !== undefined) handleChange('paymentTerms', days);
+                                        }}
                                     />
-                                    <p className="text-xs text-warmgray-500 mt-1">Lama jatuh tempo faktur (Net n days)</p>
+                                    <p className="text-xs text-warmgray-500 mt-1">Lama jatuh tempo faktur</p>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-warmgray-700 mb-1">Limit Piutang (IDR)</label>

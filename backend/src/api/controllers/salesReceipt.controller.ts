@@ -50,6 +50,23 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
 
 });
 
+// PUT /api/sales-receipts/:id
+router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const user = (req as any).user;
+        const data = createReceiptSchema.parse(req.body); // Reuse schema
+
+        const receipt = await receiptService.update(req.params.id, data, user.id);
+        res.json(receipt);
+    } catch (error) {
+        console.error("Update Receipt Error", error);
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ message: "Validation Error", errors: error.errors });
+        }
+        res.status(500).json({ message: (error as Error).message });
+    }
+});
+
 // DELETE /api/sales-receipts/:id
 router.delete('/:id', authenticateToken, async (req: Request, res: Response) => {
     try {

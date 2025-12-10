@@ -68,7 +68,15 @@ router.get('/', async (req: Request, res: Response) => {
             orderBy: {
                 fakturDate: 'desc',
             },
-            include: {
+            select: {
+                id: true,
+                fakturNumber: true,
+                fakturDate: true,
+                notes: true,
+                createdBy: true,
+                totalAmount: true,
+                amountPaid: true,
+                status: true,
                 customer: {
                     select: {
                         name: true
@@ -116,9 +124,11 @@ router.get('/:id', async (req: Request, res: Response) => {
             where: { id },
             include: {
                 customer: true,
+                salesperson: true, // Include salesperson data
                 lines: {
                     include: {
-                        item: true
+                        item: true,
+                        warehouse: true // Include warehouse data for each line
                     }
                 },
                 salesOrder: true

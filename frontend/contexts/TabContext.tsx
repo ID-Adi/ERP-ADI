@@ -32,7 +32,7 @@ interface TabContextType {
     setActiveFeatureTab: (id: string) => void;
 
     // Data Tab Actions
-    openDataTab: (featureId: string, tab: Omit<DataTab, 'data' | 'isDirty'>) => void;
+    openDataTab: (featureId: string, tab: Omit<DataTab, 'isDirty'>) => void;
     closeDataTab: (featureId: string, tabId: string) => void;
     setActiveDataTab: (featureId: string, tabId: string) => void;
     updateDataTabData: (featureId: string, tabId: string, data: Record<string, unknown>) => void;
@@ -217,7 +217,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
     }, []);
 
     // Open a data tab within a feature
-    const openDataTab = useCallback((featureId: string, tab: Omit<DataTab, 'data' | 'isDirty'>) => {
+    const openDataTab = useCallback((featureId: string, tab: Omit<DataTab, 'isDirty'>) => {
         setFeatureTabs(prev => prev.map(feature => {
             if (feature.id !== featureId) return feature;
 
@@ -228,7 +228,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
             return {
                 ...feature,
-                dataTabs: [...feature.dataTabs, { ...tab, data: {}, isDirty: false }],
+                dataTabs: [...feature.dataTabs, { ...tab, data: tab.data || {}, isDirty: false }],
                 activeDataTabId: tab.id,
             };
         }));

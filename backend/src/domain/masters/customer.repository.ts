@@ -49,7 +49,8 @@ export class CustomerRepository extends BaseRepository<Customer, Prisma.Customer
                     select: {
                         balanceDue: true
                     }
-                }
+                },
+                paymentTerm: true
             }
         });
 

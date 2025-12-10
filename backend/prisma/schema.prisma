@@ -24,6 +24,7 @@ model Company {
   updatedAt DateTime @updatedAt
 
   users       User[]
+  paymentTerms PaymentTerm[]
   customers   Customer[]
   items       Item[]
   salesOrders SalesOrder[]
@@ -95,6 +96,8 @@ model Customer {
   priceCategory     String?   // Kategori Harga
   discountCategory  String?   // Kategori Diskon
   paymentTerms      Int       @default(0) // Syarat Pembayaran (Days)
+  paymentTermId     String? // New Relation
+  paymentTerm       PaymentTerm? @relation(fields: [paymentTermId], references: [id])
   creditLimit       Decimal   @default(0) @db.Decimal(15, 2) // Limit Piutang
   maxReceivableDays Int       @default(0) // Nilai Umur Piutang (hari)
   salesperson       String?   // Default Penjual
@@ -218,6 +221,23 @@ model Unit {
   company     Company  @relation(fields: [companyId], references: [id])
   
   @@unique([companyId, name])
+}
+
+model PaymentTerm {
+  id          String   @id @default(uuid())
+  companyId   String
+  code        String
+  name        String
+  days        Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company    @relation(fields: [companyId], references: [id])
+  customers   Customer[]
+  fakturs     Faktur[]
+
+  @@unique([companyId, code])
 }
 
 model ItemPricing {
@@ -464,6 +484,8 @@ model Faktur {
   dueDate       DateTime?
   shippingDate  DateTime?
   paymentTerms  String?
+  paymentTermId String? // New Relation
+  paymentTerm   PaymentTerm? @relation(fields: [paymentTermId], references: [id])
   taxInclusive  Boolean       @default(true)
 
   customerId    String

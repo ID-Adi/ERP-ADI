@@ -1,16 +1,18 @@
 'use client';
 
 import { MapPin, Truck, AlertCircle, Search, X, Receipt } from 'lucide-react';
-import SearchableSelect from '@/components/ui/SearchableSelect';
+// import SearchableSelect from '@/components/ui/SearchableSelect'; // Unused
 import DatePicker from '@/components/ui/DatePicker';
 import { cn } from '@/lib/utils';
+import PaymentTermSelect from '@/components/business/payment/PaymentTermSelect';
 
 interface InvoiceInfoViewProps {
     formData: any;
     onChange: (field: string, value: any) => void;
+    onPaymentTermChange: (termId: string, days?: number) => void;
 }
 
-export default function InvoiceInfoView({ formData, onChange }: InvoiceInfoViewProps) {
+export default function InvoiceInfoView({ formData, onChange, onPaymentTermChange }: InvoiceInfoViewProps) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full bg-white rounded-lg shadow-sm border border-warmgray-200 p-6 overflow-auto">
 
@@ -28,17 +30,9 @@ export default function InvoiceInfoView({ formData, onChange }: InvoiceInfoViewP
                             Syarat Pembayaran <span className="text-red-500">*</span>
                         </label>
                         <div className="col-span-8">
-                            <SearchableSelect
-                                options={[
-                                    { value: 'NET30', label: 'Net 30 Days' },
-                                    { value: 'NET60', label: 'Net 60 Days' },
-                                    { value: 'COD', label: 'Cash on Delivery' },
-                                    { value: 'CIA', label: 'Cash in Advance' },
-                                ]}
+                            <PaymentTermSelect
                                 value={formData.paymentTerms}
-                                onChange={(val) => onChange('paymentTerms', val)}
-                                placeholder="Pilih Syarat Pembayaran..."
-                                required
+                                onChange={onPaymentTermChange}
                             />
                         </div>
                     </div>
