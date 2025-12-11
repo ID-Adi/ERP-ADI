@@ -1022,14 +1022,7 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
     };
 
     const handleRowClick = (index: number) => {
-        if (isEdit) return; // Prevent editing stock on Item Edit mode if backend restriction applies, but user asked for it. Assuming allowed. 
-        // Actually, for "Opening Stock", typically it's only allowed during creation or if explicitly allowed. 
-        // User request: "row click maka dapat melakukan edit data". usage matches implementation plan.
-
-        // However, if we are in "Edit Item" mode (isEdit=true), existing stocks might be locked or handled differently.
-        // But the data.openingStocks logic seems to be for transient state before saving.
-        // If the item is already saved, openingStocks might come from DB.
-
+        // Allow editing in both Create and Edit modes
         setEditingStockIndex(index);
         setIsModalOpen(true);
     };
@@ -1062,15 +1055,14 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
             </div>
 
             <Card title="Stok Awal" className="w-full" headerAction={
-                !isEdit && (
-                    <button
-                        onClick={handleAddNew}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium shadow-sm"
-                    >
-                        <Plus className="h-4 w-4" />
-                        <span>Tambah Stok</span>
-                    </button>
-                )
+                // Show Add button in both Create and Edit modes as requested
+                <button
+                    onClick={handleAddNew}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium shadow-sm"
+                >
+                    <Plus className="h-4 w-4" />
+                    <span>Tambah Stok</span>
+                </button>
             }>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -1100,17 +1092,17 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
                                 data.openingStocks.map((stock: any, idx: number) => (
                                     <tr
                                         key={idx}
-                                        className={cn("bg-white transition-colors", !isEdit ? "hover:bg-surface-50 cursor-pointer" : "")}
-                                        onClick={() => !isEdit && handleRowClick(idx)}
+                                        className="hover:bg-surface-50 cursor-pointer transition-colors"
+                                        onClick={() => handleRowClick(idx)}
                                     >
-                                        <td className="px-6 py-3 text-warmgray-900">{stock.date}</td>
-                                        <td className="px-6 py-3 text-warmgray-900">
-                                            {warehouses.find(w => w.id === stock.warehouseId)?.name || stock.warehouseId}
+                                        <td className="px-6 py-4">{stock.date}</td>
+                                        <td className="px-6 py-4">
+                                            {stock.warehouseName || warehouses.find((w: any) => w.id === stock.warehouseId)?.name || stock.warehouseId}
                                         </td>
-                                        <td className="px-6 py-3 text-right font-medium text-warmgray-900">{stock.quantity}</td>
-                                        <td className="px-6 py-3 text-warmgray-600">{stock.unit}</td>
-                                        <td className="px-6 py-3 text-right text-warmgray-600">{formatCurrency(stock.costPerUnit)}</td>
-                                        <td className="px-6 py-3 text-right font-medium text-warmgray-900">{formatCurrency(Number(stock.quantity) * Number(stock.costPerUnit))}</td>
+                                        <td className="px-6 py-4 text-right font-medium">{stock.quantity}</td>
+                                        <td className="px-6 py-4">{stock.unit}</td>
+                                        <td className="px-6 py-4 text-right">{formatCurrency(stock.costPerUnit)}</td>
+                                        <td className="px-6 py-4 text-right font-medium">{formatCurrency(Number(stock.quantity) * Number(stock.costPerUnit))}</td>
                                     </tr>
                                 ))
                             )}

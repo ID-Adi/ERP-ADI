@@ -1153,109 +1153,142 @@ router.put('/:id', async (req: Request, res: Response) => {
                     if (existingInvAcc) inventoryAccountId = existingInvAcc.accountId;
                 }
 
-                // Deduplicate stocks by warehouse
-                const stockMap = new Map();
+                // Process each stock entry individually (Update or Create)
                 for (const stock of openingStocks) {
-                    const existing = stockMap.get(stock.warehouseId);
-                    if (existing) {
-                        existing.quantity += Number(stock.quantity);
-                        existing.totalCost += Number(stock.totalCost);
-                    } else {
-                        stockMap.set(stock.warehouseId, {
-                            ...stock,
-                            quantity: Number(stock.quantity),
-                            totalCost: Number(stock.totalCost)
+                    const qty = Number(stock.quantity);
+                    const cost = Number(stock.totalCost);
+
+                    if (stock.id) {
+                        // === UPDATE EXISTING TRANSACTION ===
+                        const existingTx = await tx.inventoryTransaction.findUnique({
+                            where: { id: stock.id }
                         });
-                    }
-                }
 
-                for (const stock of Array.from(stockMap.values())) {
-                    const { warehouseId, quantity, totalCost } = stock;
+                        if (existingTx) {
+                            const oldQty = Number(existingTx.quantity);
+                            const deltaQty = qty - oldQty;
 
-                    // Upsert ItemStock
-                    const existingStock = await tx.itemStock.findFirst({
-                        where: { itemId: id, warehouseId }
-                    });
+                            // Update ItemStock if quantity changed
+                            if (deltaQty !== 0) {
+                                // Find specific stock for this item & warehouse
+                                const specificStock = await tx.itemStock.findFirst({
+                                    where: { itemId: id, warehouseId: stock.warehouseId }
+                                });
 
-                    if (existingStock) {
-                        await tx.itemStock.update({
-                            where: { id: existingStock.id },
-                            data: {
-                                currentStock: { increment: quantity },
-                                availableStock: { increment: quantity },
-                                updatedAt: new Date()
+                                if (specificStock) {
+                                    await tx.itemStock.update({
+                                        where: { id: specificStock.id },
+                                        data: {
+                                            currentStock: { increment: deltaQty },
+                                            availableStock: { increment: deltaQty },
+                                            updatedAt: new Date()
+                                        }
+                                    });
+                                }
                             }
-                        });
+
+                            // Update InventoryTransaction
+                            await tx.inventoryTransaction.update({
+                                where: { id: existingTx.id },
+                                data: {
+                                    quantity: qty,
+                                    costPerUnit: Number(stock.costPerUnit),
+                                    totalCost: cost,
+                                    warehouseId: stock.warehouseId,
+                                    transactionDate: new Date(stock.date || new Date()),
+                                    notes: `Update Stok Awal - ${name}`,
+                                    updatedAt: new Date()
+                                }
+                            });
+                        }
                     } else {
-                        await tx.itemStock.create({
+                        // === CREATE NEW TRANSACTION ===
+                        // 1. Upsert ItemStock
+                        const existingStock = await tx.itemStock.findFirst({
+                            where: { itemId: id, warehouseId: stock.warehouseId }
+                        });
+
+                        if (existingStock) {
+                            await tx.itemStock.update({
+                                where: { id: existingStock.id },
+                                data: {
+                                    currentStock: { increment: qty },
+                                    availableStock: { increment: qty },
+                                    updatedAt: new Date()
+                                }
+                            });
+                        } else {
+                            await tx.itemStock.create({
+                                data: {
+                                    id: crypto.randomUUID(),
+                                    itemId: id,
+                                    warehouseId: stock.warehouseId,
+                                    minStock: minStock || 0,
+                                    maxStock: 0,
+                                    currentStock: qty,
+                                    reservedStock: 0,
+                                    availableStock: qty,
+                                    reorderPoint: minStock || 0,
+                                    updatedAt: new Date()
+                                }
+                            });
+                        }
+
+                        // 3. Create Inventory Transaction
+                        await tx.inventoryTransaction.create({
                             data: {
                                 id: crypto.randomUUID(),
-                                itemId: id,
-                                warehouseId: warehouseId,
-                                minStock: minStock || 0,
-                                maxStock: 0,
-                                currentStock: quantity,
-                                reservedStock: 0,
-                                availableStock: quantity, // Assume initial stock is available
-                                reorderPoint: minStock || 0,
-                                updatedAt: new Date()
-                            }
-                        });
-                    }
-
-                    // Create Inventory Transaction
-                    await tx.inventoryTransaction.create({
-                        data: {
-                            id: crypto.randomUUID(),
-                            companyId: companyId,
-                            itemId: id,
-                            warehouseId: warehouseId,
-                            transactionDate: new Date(stock.date || new Date()),
-                            transactionType: 'INITIAL',
-                            referenceNo: 'OPENING-EDIT',
-                            quantity: quantity,
-                            unit: stock.unit || 'PCS',
-                            costPerUnit: stock.costPerUnit || 0,
-                            totalCost: totalCost,
-                            notes: `Tambahan Stok Awal - ${name}`,
-                            createdAt: new Date(),
-                            updatedAt: new Date(),
-                            createdBy: 'SYSTEM'
-                        }
-                    });
-
-                    // Journal Entry
-                    if (quantity > 0 && equityAccount && inventoryAccountId) {
-                        const journal = await tx.journalEntry.create({
-                            data: {
                                 companyId: companyId,
+                                itemId: id,
+                                warehouseId: stock.warehouseId,
                                 transactionDate: new Date(stock.date || new Date()),
-                                transactionNo: `JV-EDIT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                                description: `Tambahan Saldo Awal Stok - ${name}`,
-                                sourceType: 'INVENTORY',
-                                sourceId: id,
+                                transactionType: 'INITIAL',
+                                referenceNo: 'OPENING-ADD',
+                                quantity: qty,
+                                unit: stock.unit || 'PCS',
+                                costPerUnit: Number(stock.costPerUnit) || 0,
+                                totalCost: cost,
+                                notes: `Tambahan Stok Awal - ${name}`,
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                                createdBy: 'SYSTEM'
                             }
                         });
 
-                        await tx.journalLine.create({
-                            data: {
-                                journalId: journal.id,
-                                accountId: inventoryAccountId,
-                                description: `Tambahan Saldo Awal Stok - ${name}`,
-                                debit: totalCost,
-                                credit: 0
-                            }
-                        });
-
-                        await tx.journalLine.create({
-                            data: {
-                                journalId: journal.id,
-                                accountId: equityAccount.id,
-                                description: `Tambahan Saldo Awal Stok - ${name}`,
-                                debit: 0,
-                                credit: totalCost
-                            }
-                        });
+                        // 3. Create Journal Entry (Only for new additions)
+                        if (qty > 0 && equityAccount && inventoryAccountId) {
+                            const journalingId = `JV-ADD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                            const journal = await tx.journalEntry.create({
+                                data: {
+                                    id: crypto.randomUUID(),
+                                    companyId: companyId,
+                                    transactionDate: new Date(stock.date || new Date()),
+                                    transactionNo: journalingId,
+                                    reference: journalingId,
+                                    description: `Tambahan Saldo Awal Stok - ${name}`,
+                                    sourceType: 'INVENTORY',
+                                    sourceId: id,
+                                    lines: {
+                                        create: [
+                                            {
+                                                id: crypto.randomUUID(),
+                                                accountId: inventoryAccountId,
+                                                description: `Tambahan Saldo Awal Stok - ${name}`,
+                                                debit: cost,
+                                                credit: 0
+                                            },
+                                            {
+                                                id: crypto.randomUUID(),
+                                                accountId: equityAccount.id,
+                                                description: `Tambahan Saldo Awal Stok - ${name}`,
+                                                debit: 0,
+                                                credit: cost
+                                            }
+                                        ]
+                                    }
+                                }
+                            });
+                        }
                     }
                 }
             }
