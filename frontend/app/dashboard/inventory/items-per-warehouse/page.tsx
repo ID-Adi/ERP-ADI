@@ -7,7 +7,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import Modal from '@/components/ui/Modal';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import api from '@/lib/api';
-import debounce from 'lodash/debounce';
+import { debounce } from '@/hooks/useDebounce';
 
 // --- Types ---
 interface StockItem {

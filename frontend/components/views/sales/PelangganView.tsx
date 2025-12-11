@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { useTabContext } from '@/contexts/TabContext';
 import CustomerForm from '@/components/sales/CustomerForm';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function PelangganView() {
     const {
@@ -29,7 +30,8 @@ export default function PelangganView() {
     // Data State
     const [customers, setCustomers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchInput, setSearchInput] = useState(''); // User input (immediate)
+    const searchQuery = useDebounce(searchInput, 500); // Debounced search query
     const [statusFilter, setStatusFilter] = useState('all');
 
     // Derived state from TabContext
@@ -114,8 +116,8 @@ export default function PelangganView() {
                 <ListView
                     customers={customers}
                     loading={loading}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
+                    searchInput={searchInput}
+                    onSearchChange={setSearchInput}
                     onRefresh={fetchCustomers}
                     onNewClick={handleNewClick}
                     onRowClick={handleRowClick}
@@ -143,7 +145,7 @@ export default function PelangganView() {
 interface ListViewProps {
     customers: any[];
     loading: boolean;
-    searchQuery: string;
+    searchInput: string;
     onSearchChange: (query: string) => void;
     onRefresh: () => void;
     onNewClick: () => void;
@@ -153,7 +155,7 @@ interface ListViewProps {
 function ListView({
     customers,
     loading,
-    searchQuery,
+    searchInput,
     onSearchChange,
     onRefresh,
     onNewClick,
@@ -232,7 +234,7 @@ function ListView({
                         <input
                             type="text"
                             placeholder=""
-                            value={searchQuery}
+                            value={searchInput}
                             onChange={(e) => onSearchChange(e.target.value)}
                             className="w-32 px-2 py-1.5 text-sm bg-white border-l border-surface-200 focus:outline-none focus:ring-0 placeholder:text-warmgray-400"
                         />

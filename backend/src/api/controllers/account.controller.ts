@@ -5,11 +5,50 @@ import { PrismaClient, AccountType } from '@prisma/client';
 const prisma = new PrismaClient();
 const router = Router();
 
-// GET /api/accounts
+// GET /api/accounts/dropdown - Lightweight endpoint for dropdowns (no pagination)
+router.get('/dropdown', async (req: Request, res: Response) => {
+    try {
+        const type = req.query.type as string;
+
+        const where: any = { isActive: true };
+
+        if (type && type !== 'Semua') {
+            if (type.includes(',')) {
+                const types = type.split(',').map(t => t.trim()) as AccountType[];
+                where.type = { in: types };
+            } else {
+                where.type = type as AccountType;
+            }
+        }
+
+        const accounts = await prisma.account.findMany({
+            where,
+            select: {
+                id: true,
+                code: true,
+                name: true,
+                type: true,
+                isHeader: true,
+                parentId: true
+            },
+            orderBy: { code: 'asc' }
+        });
+
+        res.json({ data: accounts });
+    } catch (error) {
+        console.error('Error fetching accounts dropdown:', error);
+        res.status(500).json({ error: 'Failed to fetch accounts' });
+    }
+});
+
+// GET /api/accounts - Paginated list for tables
 router.get('/', async (req: Request, res: Response) => {
     try {
         const type = req.query.type as string;
         const search = req.query.search as string;
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const skip = (page - 1) * limit;
 
         const where: any = {};
 
@@ -29,26 +68,36 @@ router.get('/', async (req: Request, res: Response) => {
             ];
         }
 
-        const accounts = await prisma.account.findMany({
-            where,
-            orderBy: {
-                code: 'asc',
-            },
-            include: {
-                parent: {
-                    select: {
-                        id: true,
-                        name: true,
-                        code: true
+        const [total, accounts] = await Promise.all([
+            prisma.account.count({ where }),
+            prisma.account.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { code: 'asc' },
+                include: {
+                    parent: {
+                        select: {
+                            id: true,
+                            name: true,
+                            code: true
+                        }
+                    },
+                    _count: {
+                        select: { children: true }
                     }
-                },
-                _count: {
-                    select: { children: true }
                 }
-            }
-        });
+            })
+        ]);
 
-        res.json({ data: accounts });
+        res.json({
+            data: accounts,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+            hasMore: skip + limit < total
+        });
 
     } catch (error) {
         console.error('Error fetching accounts:', error);

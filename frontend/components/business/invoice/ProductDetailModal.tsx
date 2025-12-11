@@ -12,6 +12,7 @@ interface LineItem {
     id: string;
     itemCode: string;
     description: string;
+    notes?: string; // User notes
     quantity: number;
     unit: string;
     unitPrice: number;
@@ -49,6 +50,7 @@ export default function ProductDetailModal({
         id: '',
         itemCode: '',
         description: '',
+        notes: '',
         quantity: 1,
         unit: 'PCS',
         unitPrice: 0,
@@ -244,6 +246,20 @@ export default function ProductDetailModal({
                         </div>
                     </div>
 
+                    {/* Row 2.5: Notes */}
+                    <div className="grid grid-cols-12 gap-3 items-center">
+                        <label className="col-span-3 text-sm font-medium text-warmgray-700">Catatan</label>
+                        <div className="col-span-9">
+                            <input
+                                type="text"
+                                value={formData.notes || ''}
+                                onChange={(e) => handleChange('notes', e.target.value)}
+                                className="w-full px-3 py-1.5 border border-warmgray-300 rounded focus:outline-none focus:ring-0 focus:border-primary-500 text-sm"
+                                placeholder="Tambahkan catatan..."
+                            />
+                        </div>
+                    </div>
+
                     {/* Row 3: Quantity */}
                     <div className="grid grid-cols-12 gap-3 items-center">
                         <label className="col-span-3 text-sm font-medium text-warmgray-700">Kuantitas</label>
@@ -436,7 +452,7 @@ export default function ProductDetailModal({
                     </Button>
                 </div>
             </div>
-        </div>,
+        </div >,
         document.body
     );
 }

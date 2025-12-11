@@ -74,6 +74,14 @@ export class CustomerService extends BaseService<Customer> {
         });
     }
 
+    async getCompanyCustomersPaginated(companyId: string, params?: { page?: number; limit?: number; search?: string; status?: string }): Promise<{ data: any[]; total: number }> {
+        return this.repository.findAllByCompanyPaginated(companyId, params);
+    }
+
+    async getCustomersForDropdown(companyId: string): Promise<{ id: string; code: string; name: string }[]> {
+        return this.repository.findAllForDropdown(companyId);
+    }
+
     async updateCustomer(id: string, companyId: string, data: any): Promise<Customer> {
         const customer = await this.repository.findById(id);
         if (!customer || customer.companyId !== companyId) {

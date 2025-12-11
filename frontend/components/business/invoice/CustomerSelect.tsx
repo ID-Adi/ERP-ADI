@@ -95,7 +95,7 @@ export default function CustomerSelect({ value, onChange, customers, placeholder
                 <div className="absolute z-50 w-full mt-1 bg-white border border-surface-300 rounded shadow-lg max-h-60 overflow-auto">
                     {filteredCustomers.length > 0 ? (
                         <ul className="py-1">
-                            {filteredCustomers.map((customer) => (
+                            {filteredCustomers.slice(0, 50).map((customer) => (
                                 <li
                                     key={customer.code}
                                     onClick={() => handleSelect(customer.code)}

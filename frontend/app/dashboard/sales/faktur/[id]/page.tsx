@@ -54,6 +54,14 @@ export default function EditInvoicePage() {
         salespersonId: apiData.salespersonId || '', // Use invoice-level salesperson for lines
         salespersonName: apiData.salesperson?.name || '-',
       })) || [],
+      costs: apiData.costs?.map((cost: any) => ({
+        id: cost.id,
+        accountId: cost.accountId,
+        accountCode: cost.account?.code || '',
+        accountName: cost.account?.name || '',
+        amount: Number(cost.amount),
+        notes: cost.notes || ''
+      })) || []
     };
   };
 

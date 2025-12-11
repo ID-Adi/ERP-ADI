@@ -63,11 +63,23 @@ export class SalesReceiptService {
                 }
             });
 
-            // 4. Update Invoices (Faktur)
-            for (const line of data.lines) {
-                const faktur = await tx.faktur.findUnique({ where: { id: line.fakturId } });
-                if (!faktur) throw new Error(`Faktur not found: ${line.fakturId}`);
+            // 4. Update Invoices (Faktur) - OPTIMIZED with batch fetching
+            const fakturIds = data.lines.map((l: any) => l.fakturId).filter(Boolean);
+            const fakturs = await tx.faktur.findMany({
+                where: { id: { in: fakturIds } }
+            });
+            const fakturMap = new Map(fakturs.map(f => [f.id, f]));
 
+            // Verify all fakturs exist
+            for (const line of data.lines) {
+                if (!fakturMap.has(line.fakturId)) {
+                    throw new Error(`Faktur not found: ${line.fakturId}`);
+                }
+            }
+
+            // Batch update all fakturs in parallel
+            await Promise.all(data.lines.map(async (line: any) => {
+                const faktur = fakturMap.get(line.fakturId)!;
                 const newAmountPaid = Number(faktur.amountPaid) + Number(line.amount);
                 const newBalanceDue = Number(faktur.totalAmount) - newAmountPaid;
 
@@ -83,7 +95,7 @@ export class SalesReceiptService {
                         status: newStatus
                     }
                 });
-            }
+            }));
 
             // 5. Create Journal Entry
             const customer = await tx.customer.findUnique({ where: { id: data.customerId } });
@@ -134,26 +146,32 @@ export class SalesReceiptService {
 
             if (!receipt) throw new Error("Receipt not found");
 
-            // 1. REVERT: Reverse Invoices impact
-            for (const line of receipt.lines) {
-                if (!line.fakturId) continue;
-                const faktur = await tx.faktur.findUnique({ where: { id: line.fakturId } });
-                if (faktur) {
-                    const newAmountPaid = Number(faktur.amountPaid) - Number(line.amount);
-                    const newBalanceDue = Number(faktur.totalAmount) - newAmountPaid;
-                    let newStatus: FakturStatus = 'PARTIAL';
-                    if (newAmountPaid <= 0) newStatus = 'UNPAID';
+            // 1. REVERT: Reverse Invoices impact - OPTIMIZED with batch fetching
+            const oldFakturIds = receipt.lines.map(l => l.fakturId).filter(Boolean) as string[];
+            const oldFakturs = await tx.faktur.findMany({
+                where: { id: { in: oldFakturIds } }
+            });
+            const oldFakturMap = new Map(oldFakturs.map(f => [f.id, f]));
 
-                    await tx.faktur.update({
-                        where: { id: line.fakturId },
-                        data: {
-                            amountPaid: newAmountPaid,
-                            balanceDue: newBalanceDue,
-                            status: newStatus
-                        }
-                    });
-                }
-            }
+            await Promise.all(receipt.lines.map(async (line) => {
+                if (!line.fakturId) return;
+                const faktur = oldFakturMap.get(line.fakturId);
+                if (!faktur) return;
+
+                const newAmountPaid = Number(faktur.amountPaid) - Number(line.amount);
+                const newBalanceDue = Number(faktur.totalAmount) - newAmountPaid;
+                let newStatus: FakturStatus = 'PARTIAL';
+                if (newAmountPaid <= 0) newStatus = 'UNPAID';
+
+                await tx.faktur.update({
+                    where: { id: line.fakturId },
+                    data: {
+                        amountPaid: newAmountPaid,
+                        balanceDue: newBalanceDue,
+                        status: newStatus
+                    }
+                });
+            }));
 
             // 2. REVERT: Delete Journal Entry
             // Find Journal Entry by sourceId
@@ -194,11 +212,22 @@ export class SalesReceiptService {
                 }))
             });
 
-            // 6. APPLY NEW: Update Invoices (Faktur)
-            for (const line of data.lines) {
-                const faktur = await tx.faktur.findUnique({ where: { id: line.fakturId } });
-                if (!faktur) throw new Error(`Faktur not found: ${line.fakturId}`);
+            // 6. APPLY NEW: Update Invoices (Faktur) - OPTIMIZED with batch fetching
+            const newFakturIds = data.lines.map((l: any) => l.fakturId).filter(Boolean);
+            const newFakturs = await tx.faktur.findMany({
+                where: { id: { in: newFakturIds } }
+            });
+            const newFakturMap = new Map(newFakturs.map(f => [f.id, f]));
 
+            // Verify all fakturs exist
+            for (const line of data.lines) {
+                if (!newFakturMap.has(line.fakturId)) {
+                    throw new Error(`Faktur not found: ${line.fakturId}`);
+                }
+            }
+
+            await Promise.all(data.lines.map(async (line: any) => {
+                const faktur = newFakturMap.get(line.fakturId)!;
                 const newAmountPaid = Number(faktur.amountPaid) + Number(line.amount);
                 const newBalanceDue = Number(faktur.totalAmount) - newAmountPaid;
 
@@ -214,7 +243,7 @@ export class SalesReceiptService {
                         status: newStatus
                     }
                 });
-            }
+            }));
 
             // 7. APPLY NEW: Create Journal Entry
             const customer = await tx.customer.findUnique({ where: { id: data.customerId } });
@@ -268,29 +297,34 @@ export class SalesReceiptService {
 
             if (!receipt) throw new Error("Receipt not found");
 
-            // 1. Reverse Invoices
-            for (const line of receipt.lines) {
-                if (!line.fakturId) continue;
+            // 1. Reverse Invoices - OPTIMIZED with batch fetching
+            const fakturIds = receipt.lines.map(l => l.fakturId).filter(Boolean) as string[];
+            const fakturs = await tx.faktur.findMany({
+                where: { id: { in: fakturIds } }
+            });
+            const fakturMap = new Map(fakturs.map(f => [f.id, f]));
 
-                const faktur = await tx.faktur.findUnique({ where: { id: line.fakturId } });
-                if (faktur) {
-                    const newAmountPaid = Number(faktur.amountPaid) - Number(line.amount);
-                    const newBalanceDue = Number(faktur.totalAmount) - newAmountPaid;
+            await Promise.all(receipt.lines.map(async (line) => {
+                if (!line.fakturId) return;
+                const faktur = fakturMap.get(line.fakturId);
+                if (!faktur) return;
 
-                    let newStatus: FakturStatus = 'PARTIAL';
-                    if (newAmountPaid <= 0) newStatus = 'UNPAID';
-                    // Note: If previously PAID, now it becomes PARTIAL or UNPAID.
+                const newAmountPaid = Number(faktur.amountPaid) - Number(line.amount);
+                const newBalanceDue = Number(faktur.totalAmount) - newAmountPaid;
 
-                    await tx.faktur.update({
-                        where: { id: line.fakturId },
-                        data: {
-                            amountPaid: newAmountPaid,
-                            balanceDue: newBalanceDue,
-                            status: newStatus
-                        }
-                    });
-                }
-            }
+                let newStatus: FakturStatus = 'PARTIAL';
+                if (newAmountPaid <= 0) newStatus = 'UNPAID';
+                // Note: If previously PAID, now it becomes PARTIAL or UNPAID.
+
+                await tx.faktur.update({
+                    where: { id: line.fakturId },
+                    data: {
+                        amountPaid: newAmountPaid,
+                        balanceDue: newBalanceDue,
+                        status: newStatus
+                    }
+                });
+            }));
 
             // 2. Hard Delete Journal Entry
             const je = await tx.journalEntry.findFirst({

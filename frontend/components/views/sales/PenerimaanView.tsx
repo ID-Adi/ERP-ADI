@@ -28,6 +28,7 @@ import api from '@/lib/api';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import { createPortal } from 'react-dom';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function PenerimaanView() {
     const router = useRouter();
@@ -48,7 +49,8 @@ export default function PenerimaanView() {
     const isNew = activeTabId === `${featureId}-new`;
 
     // --- Data Fetching State ---
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchInput, setSearchInput] = useState('');
+    const searchQuery = useDebounce(searchInput, 500);
     // Unified filters state for consistency with Inventory Items pattern
     const [filters, setFilters] = useState({
         startDate: '',
@@ -253,8 +255,8 @@ export default function PenerimaanView() {
             <div className={cn("contents")}>
                 <ListView
                     items={items}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
+                    searchInput={searchInput}
+                    onSearchChange={setSearchInput}
                     loading={loading}
                     onRowClick={handleRowClick}
                     onNewClick={handleNewClick}
@@ -275,7 +277,7 @@ export default function PenerimaanView() {
 // ============================================================================
 interface ListViewProps {
     items: any[];
-    searchQuery: string;
+    searchInput: string;
     onSearchChange: (query: string) => void;
     loading: boolean;
     onRowClick: (item: any) => void;
@@ -294,7 +296,7 @@ interface ListViewProps {
 
 function ListView({
     items,
-    searchQuery,
+    searchInput,
     onSearchChange,
     loading,
     onRowClick,
@@ -379,7 +381,7 @@ function ListView({
                         <input
                             type="text"
                             placeholder=""
-                            value={searchQuery}
+                            value={searchInput}
                             onChange={(e) => onSearchChange(e.target.value)}
                             className="w-32 px-2 py-1.5 text-sm bg-white border-l border-surface-200 focus:outline-none focus:ring-0 placeholder:text-warmgray-400"
                         />

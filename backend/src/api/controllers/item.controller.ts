@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient, PriceType } from '@prisma/client';
+import { PrismaClient, PriceType, TransactionType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -216,6 +216,13 @@ router.get('/', async (req: Request, res: Response) => {
                             taxName: true,
                             taxRate: true
                         }
+                    },
+                    inventoryTransactions: {
+                        where: { transactionType: 'INITIAL' },
+                        orderBy: { transactionDate: 'desc' },
+                        include: {
+                            warehouse: { select: { id: true, name: true } }
+                        }
                     }
                 }
             })
@@ -275,7 +282,15 @@ router.get('/', async (req: Request, res: Response) => {
                 // Full relational data for detail view
                 pricing: item.pricing,
                 stocks: item.stocks,
-                suppliers: item.suppliers
+                suppliers: item.suppliers,
+                openingStocks: item.inventoryTransactions.map(t => ({
+                    date: t.transactionDate.toISOString().split('T')[0],
+                    warehouseId: t.warehouseId,
+                    quantity: Number(t.quantity),
+                    unit: t.unit,
+                    costPerUnit: Number(t.costPerUnit),
+                    totalCost: Number(t.totalCost)
+                }))
             };
         });
 
@@ -410,7 +425,14 @@ router.get('/:id', async (req: Request, res: Response) => {
                     orderBy: { isPrimary: 'desc' }
                 },
                 taxes: true,
-                accounts: true
+                accounts: true,
+                inventoryTransactions: {
+                    where: { transactionType: 'INITIAL' },
+                    orderBy: { transactionDate: 'desc' },
+                    include: {
+                        warehouse: { select: { id: true, name: true } }
+                    }
+                }
             }
         });
 
@@ -819,39 +841,60 @@ router.post('/', async (req: Request, res: Response) => {
                     });
 
                     // Create Journal Entry if quantity > 0 and accounts exist
-                    if (quantity > 0 && equityAccount && inventoryAccountId) {
-                        const journal = await tx.journalEntry.create({
+                    if (quantity > 0) {
+                        // 1. Create Inventory Transaction (History)
+                        await tx.inventoryTransaction.create({
                             data: {
                                 companyId: defaultCompany.id,
+                                itemId: newItem.id,
+                                warehouseId: warehouseId,
                                 transactionDate: new Date(stock.date || new Date()),
-                                transactionNo: `JV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                                description: `Saldo Awal Stok - ${newItem.name}`,
-                                sourceType: 'INVENTORY',
-                                sourceId: newItem.id,
+                                transactionType: TransactionType.INITIAL,
+                                quantity: quantity,
+                                unit: stock.unit || newItem.uom,
+                                costPerUnit: Number(stock.costPerUnit),
+                                totalCost: totalCost,
+                                notes: 'Saldo Awal Stok',
+                                createdBy: 'SYSTEM', // TODO: Get from auth user
                             }
                         });
 
-                        // Debit Inventory
-                        await tx.journalLine.create({
-                            data: {
-                                journalId: journal.id,
-                                accountId: inventoryAccountId,
-                                description: `Saldo Awal Stok - ${newItem.name}`,
-                                debit: totalCost,
-                                credit: 0
-                            }
-                        });
 
-                        // Credit Equity
-                        await tx.journalLine.create({
-                            data: {
-                                journalId: journal.id,
-                                accountId: equityAccount.id,
-                                description: `Saldo Awal Stok - ${newItem.name}`,
-                                debit: 0,
-                                credit: totalCost
-                            }
-                        });
+                        // 2. Create Journal Entry if accounts map exists
+                        if (equityAccount && inventoryAccountId) {
+                            const journal = await tx.journalEntry.create({
+                                data: {
+                                    companyId: defaultCompany.id,
+                                    transactionDate: new Date(stock.date || new Date()),
+                                    transactionNo: `JV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                                    description: `Saldo Awal Stok - ${newItem.name}`,
+                                    sourceType: 'INVENTORY',
+                                    sourceId: newItem.id,
+                                }
+                            });
+
+                            // Debit Inventory
+                            await tx.journalLine.create({
+                                data: {
+                                    journalId: journal.id,
+                                    accountId: inventoryAccountId,
+                                    description: `Saldo Awal Stok - ${newItem.name}`,
+                                    debit: totalCost,
+                                    credit: 0
+                                }
+                            });
+
+                            // Credit Equity
+                            await tx.journalLine.create({
+                                data: {
+                                    journalId: journal.id,
+                                    accountId: equityAccount.id,
+                                    description: `Saldo Awal Stok - ${newItem.name}`,
+                                    debit: 0,
+                                    credit: totalCost
+                                }
+                            });
+                        }
                     }
                 }
             } else {

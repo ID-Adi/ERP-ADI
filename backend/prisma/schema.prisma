@@ -38,6 +38,7 @@ model Company {
   salespersons   Salesperson[]
   employees      Employee[]
   printTemplates PrintTemplate[]
+  inventoryTransactions InventoryTransaction[]
 }
 
 model User {
@@ -185,6 +186,7 @@ model Item {
   suppliers  ItemSupplier[]
   taxes      ItemTax[]
   accounts   ItemAccount[]
+  inventoryTransactions InventoryTransaction[]
 
   @@unique([companyId, code])
   @@index([categoryId])
@@ -295,6 +297,7 @@ model Salesperson {
 
   company Company @relation(fields: [companyId], references: [id])
   fakturs Faktur[]
+  fakturLines FakturLine[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -348,6 +351,7 @@ model Warehouse {
   company Company     @relation(fields: [companyId], references: [id])
   stocks  ItemStock[]
   fakturLines FakturLine[]
+  inventoryTransactions InventoryTransaction[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -375,6 +379,48 @@ model ItemStock {
   @@index([itemId])
   @@index([warehouseId])
   @@index([warehouseId, availableStock])
+}
+
+model InventoryTransaction {
+  id              String   @id @default(uuid())
+  companyId       String
+  itemId          String
+  warehouseId     String
+  
+  transactionDate DateTime
+  transactionType TransactionType // Enum: INITIAL, ADJ_IN, ADJ_OUT, PURCHASE, SALE, TRANSFER
+  referenceNo     String?         // No. Ref (e.g. GR-001, DO-001)
+  
+  quantity        Decimal  @db.Decimal(10, 2)
+  unit            String
+  costPerUnit     Decimal  @default(0) @db.Decimal(15, 2) // Penting untuk valuasi stok
+  totalCost       Decimal  @default(0) @db.Decimal(15, 2)
+  
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+
+  company   Company   @relation(fields: [companyId], references: [id])
+  item      Item      @relation(fields: [itemId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([companyId])
+  @@index([itemId])
+  @@index([warehouseId])
+  @@index([transactionDate])
+}
+
+enum TransactionType {
+  INITIAL       // Saldo Awal
+  ADJ_IN        // Penyesuaian Masuk
+  ADJ_OUT       // Penyesuaian Keluar
+  PURCHASE      // Pembelian
+  SALE          // Penjualan
+  TRANSFER_IN   // Transfer Masuk
+  TRANSFER_OUT  // Transfer Keluar
+  STOCK_OPNAME  // Opname
 }
 
 model ItemSupplier {
@@ -568,15 +614,21 @@ model FakturLine {
   id            String        @id @default(uuid())
   fakturId      String
   itemId        String?
-  description   String
+  itemName      String        // Previously description
+  description   String?       // New field for user notes/details
 
+  unit          String?       // Satuan saat transaksi (PCS, BOX, etc)
   quantity      Decimal       @db.Decimal(10, 2)
   unitPrice     Decimal       @db.Decimal(15, 2)
   discountPercent Decimal     @default(0) @db.Decimal(5, 2)
+  discountAmount  Decimal     @default(0) @db.Decimal(15, 2) // Diskon Nominal per baris
   amount        Decimal       @db.Decimal(15, 2)
 
   warehouseId   String?
   warehouse     Warehouse?    @relation(fields: [warehouseId], references: [id])
+  
+  salespersonId String?
+  salesperson   Salesperson?  @relation(fields: [salespersonId], references: [id])
 
   faktur        Faktur        @relation(fields: [fakturId], references: [id], onDelete: Cascade)
   item          Item?         @relation(fields: [itemId], references: [id])
@@ -584,6 +636,7 @@ model FakturLine {
   @@index([fakturId])
   @@index([itemId])
   @@index([warehouseId])
+  @@index([salespersonId])
 }
 
 model FakturCost {

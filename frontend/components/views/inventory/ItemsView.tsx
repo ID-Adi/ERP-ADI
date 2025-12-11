@@ -26,6 +26,7 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 // Updated imports to point to original location
 import ImportView from '@/app/dashboard/inventory/items/ImportView';
 import StockModal from '@/app/dashboard/inventory/items/StockModal';
+import { useDebounce } from '@/hooks/useDebounce';
 
 import api from '@/lib/api';
 
@@ -44,7 +45,8 @@ export default function ItemsView() {
     const featureId = '/dashboard/inventory/items';
 
     // Data state
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchInput, setSearchInput] = useState('');
+    const searchQuery = useDebounce(searchInput, 500);
     const [filters, setFilters] = useState({
         status: 'Semua',
         category: 'Semua',
@@ -204,8 +206,8 @@ export default function ItemsView() {
             <div className={cn("contents")}>
                 <ListView
                     items={items}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
+                    searchInput={searchInput}
+                    onSearchChange={setSearchInput}
                     loading={loading}
                     onRowClick={handleRowClick}
                     onNewClick={handleNewClick}
@@ -229,7 +231,7 @@ export default function ItemsView() {
 // ============================================================================
 interface ListViewProps {
     items: any[];
-    searchQuery: string;
+    searchInput: string;
     onSearchChange: (query: string) => void;
     loading: boolean;
     onRowClick: (item: any) => void;
@@ -252,7 +254,7 @@ interface ListViewProps {
 
 function ListView({
     items,
-    searchQuery,
+    searchInput,
     onSearchChange,
     loading,
     onRowClick,
@@ -365,7 +367,7 @@ function ListView({
                         <input
                             type="text"
                             placeholder=""
-                            value={searchQuery}
+                            value={searchInput}
                             onChange={(e) => onSearchChange(e.target.value)}
                             className="w-32 px-2 py-1.5 text-sm bg-white border-l border-surface-200 focus:outline-none focus:ring-0 placeholder:text-warmgray-400"
                         />
@@ -727,7 +729,7 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                 <div className="max-w-6xl mx-auto">
                     {subTab === 'umum' && <TabUmum data={formData} onChange={handleChange} units={units} categories={categories} isEdit={isEdit} />}
                     {subTab === 'penjualan-pembelian' && <TabPenjualanPembelian data={formData} onChange={handleChange} />}
-                    {subTab === 'stok' && <TabStok data={formData} onChange={handleChange} warehouses={warehouses} units={units} />}
+                    {subTab === 'stok' && <TabStok data={formData} onChange={handleChange} warehouses={warehouses} units={units} isEdit={isEdit} />}
                     {subTab === 'akun' && <TabAkun data={formData} onChange={handleChange} accountList={accountList} />}
                     {subTab === 'lain-lain' && <TabLainLain />}
                 </div>
@@ -936,7 +938,7 @@ function TabPenjualanPembelian({ data, onChange }: { data: any, onChange: (field
 // ============================================================================
 // TAB: STOK
 // ============================================================================
-function TabStok({ data, onChange, warehouses = [], units = [] }: { data: any, onChange: (field: string, value: any) => void, warehouses?: any[], units?: any[] }) {
+function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }: { data: any, onChange: (field: string, value: any) => void, warehouses?: any[], units?: any[], isEdit?: boolean }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const handleAddStock = (stockData: any) => {
@@ -967,13 +969,15 @@ function TabStok({ data, onChange, warehouses = [], units = [] }: { data: any, o
             </div>
 
             <Card title="Stok Awal" className="w-full" headerAction={
-                <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium shadow-sm"
-                >
-                    <Plus className="h-4 w-4" />
-                    <span>Tambah Stok</span>
-                </button>
+                !isEdit && (
+                    <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium shadow-sm"
+                    >
+                        <Plus className="h-4 w-4" />
+                        <span>Tambah Stok</span>
+                    </button>
+                )
             }>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FileText, Package, List, AlignLeft, Search, Calendar, User, Hash,
@@ -57,6 +57,7 @@ interface LineItem {
   itemId?: string; // Database ID for backend
   itemCode: string;
   description: string;
+  notes?: string; // User notes
   quantity: number;
   unit: string;
   unitPrice: number;
@@ -144,30 +145,36 @@ export default function InvoiceForm({
     fetchCustomers();
   }, []);
 
-  // Auto-set Salesperson from first line item
+  // Memoize customers to avoid re-rendering CustomerSelect
+  const mappedCustomers = useMemo(() => customers.map(c => ({
+    code: c.code || c.id,
+    name: c.name,
+    phone: c.phone || c.mobile,
+    address: c.billingCity ? `${c.billingAddress}, ${c.billingCity}` : c.billingAddress
+  })), [customers]);
+
+  // Auto-set Salesperson from first available line item
   useEffect(() => {
     if (lines.length > 0) {
-      const firstLine = lines[0];
-      // Only update if formData.salespersonId is empty or different from the first line's salesperson
-      // AND the first line actually has a salesperson
-      // Logic: "if not yet available take salesperson name from the first product input in the table"
-      // "and add logic if the first product is deleted then take from the product in the table data at the top!"
+      // Find first line that has a salesperson assigned
+      const lineWithSalesperson = lines.find(line => line.salespersonId);
 
-      // We can simply say: Always sync the invoice salesperson with the first line's salesperson IF the invoice salesperson is not manually set?
-      // Or strictly follow: "if not yet available" -> implies only if empty.
-      // But "if first product deleted then take from top" implies dynamic update.
-      // So, let's make it dynamic: If lines exist, default salesperson to the first line's salesperson.
-      // But we should probably allow manual override? The user didn't ask for manual override on the invoice level, 
-      // they asked for logic to *take* it from the table.
-
-      if (firstLine.salespersonId) {
+      if (lineWithSalesperson?.salespersonId) {
         setFormData(prev => {
-          if (prev.salespersonId !== firstLine.salespersonId) {
-            return { ...prev, salespersonId: firstLine.salespersonId || '' };
+          // Only update if different (avoid infinite loops)
+          if (prev.salespersonId !== lineWithSalesperson.salespersonId) {
+            return { ...prev, salespersonId: lineWithSalesperson.salespersonId };
           }
           return prev;
         });
+      } else if (!formData.salespersonId) {
+        // No lines have salesperson - clear invoice salesperson if not manually set
+        // (This prevents stale data when all salespersons removed)
+        setFormData(prev => ({ ...prev, salespersonId: '' }));
       }
+    } else {
+      // No lines at all - clear salesperson
+      setFormData(prev => ({ ...prev, salespersonId: '' }));
     }
   }, [lines]);
 
@@ -264,19 +271,23 @@ export default function InvoiceForm({
       const newData = { ...prev, vendorCode: code };
 
       // Auto-select payment term if available on customer
-      if (selectedCustomer?.paymentTerm) {
-        newData.paymentTerms = selectedCustomer.paymentTerm.id;
+      if (selectedCustomer?.paymentTermId || selectedCustomer?.paymentTerm) {
+        // Prefer relation (new format)
+        const termId = selectedCustomer.paymentTermId || selectedCustomer.paymentTerm?.id;
+        const days = selectedCustomer.paymentTerm?.days || 0;
+
+        newData.paymentTerms = termId;
 
         // Calculate due date
-        const days = selectedCustomer.paymentTerm.days || 0;
         const invDate = new Date(prev.fakturDate);
-        if (!isNaN(invDate.getTime())) {
+        if (!isNaN(invDate.getTime()) && days > 0) {
           const due = new Date(invDate);
           due.setDate(invDate.getDate() + days);
           newData.dueDate = due.toISOString().split('T')[0];
         }
-      } else if (selectedCustomer?.paymentTerms) {
-        // Legacy support: if customer has 'paymentTerms' (int days) but no relation
+      } else if (selectedCustomer?.paymentTerms && typeof selectedCustomer.paymentTerms === 'number') {
+        // LEGACY FALLBACK: Old integer days format (deprecated)
+        console.warn('Customer using legacy paymentTerms integer. Please update to PaymentTerm relation.');
         const days = selectedCustomer.paymentTerms;
         const invDate = new Date(prev.fakturDate);
         if (!isNaN(invDate.getTime())) {
@@ -284,8 +295,7 @@ export default function InvoiceForm({
           due.setDate(invDate.getDate() + days);
           newData.dueDate = due.toISOString().split('T')[0];
         }
-        // Note: we don't set 'newData.paymentTerms' (ID) because we don't have an ID. 
-        // The user will see empty dropdown but correct due date.
+        // Don't set paymentTerms ID - user must select manually
       }
 
       return newData;
@@ -342,6 +352,49 @@ export default function InvoiceForm({
     // For now, let's just let the Term Change handler handle the calculation.
   }, [formData.fakturDate]);
 
+  // Helper: Calculate distributed lines with global discount
+  const calculateDistributedLines = useCallback(() => {
+    const globalDisc = totals.globalDiscountAmount || 0;
+
+    // Calculate Total Net Amount (Base - ItemDisc) as weight for distribution
+    const totalNet = lines.reduce((sum, line) => {
+      const base = line.quantity * line.unitPrice;
+      const itemDisc = line.discountAmount || 0;
+      return sum + (base - itemDisc);
+    }, 0);
+
+    return lines.map(line => {
+      const baseAmount = line.quantity * line.unitPrice;
+      const itemDisc = line.discountAmount || 0;
+      const netAmount = baseAmount - itemDisc;
+
+      let share = 0;
+      if (totalNet > 0 && globalDisc > 0) {
+        share = (netAmount / totalNet) * globalDisc;
+      }
+
+      const finalAmount = netAmount - share;
+      const totalDiscountAmount = baseAmount - finalAmount;
+
+      let newDiscountPercent = 0;
+      if (baseAmount > 0) {
+        newDiscountPercent = (totalDiscountAmount / baseAmount) * 100;
+      }
+
+      return {
+        itemId: line.itemId,
+        description: line.description,
+        unit: line.unit,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discountPercent: newDiscountPercent,
+        discountAmount: totalDiscountAmount,
+        amount: finalAmount,
+        warehouseId: line.warehouseId
+      };
+    });
+  }, [lines, totals.globalDiscountAmount]);
+
   const handleSubmit = async (e: React.FormEvent, statusOverride?: string) => {
     e.preventDefault();
     setIsLoading(true);
@@ -380,42 +433,40 @@ export default function InvoiceForm({
         return;
       }
 
-      // Calculate Global Discount Distribution (Pro-ration)
-      const globalDisc = totals.globalDiscountAmount;
-      const totalLiableAmount = lines.reduce((sum, line) => sum + line.lineAmount, 0); // Using lineAmount (Subtotal - ItemDisc) as base
+      // Validate line items quality
+      const validationErrors: string[] = [];
 
-      const distributedLines = lines.map(line => {
-        let share = 0;
-        if (totalLiableAmount > 0 && globalDisc > 0) {
-          share = (line.lineAmount / totalLiableAmount) * globalDisc;
+      lines.forEach((line, index) => {
+        if (line.quantity <= 0) {
+          validationErrors.push(`Baris ${index + 1}: Kuantitas harus > 0`);
         }
-
-        // New Net Amount for this line
-        const newAmount = line.lineAmount - share;
-
-        // Calculate effective Discount Percent
-        // Original Disc Amount = (Price * Qty) - lineAmount
-        // New Total Disc Amount = Original Disc Amount + Share
-        // New Percent = (New Total Disc / (Price * Qty)) * 100
-
-        const baseAmount = line.unitPrice * line.quantity;
-        const totalDiscountAmount = (baseAmount - newAmount); // Includes item disc + global share
-
-        let newDiscountPercent = 0;
-        if (baseAmount > 0) {
-          newDiscountPercent = (totalDiscountAmount / baseAmount) * 100;
+        if (!line.warehouseId && line.itemId) {
+          validationErrors.push(`Baris ${index + 1}: Gudang wajib dipilih`);
         }
-
-        return {
-          itemId: line.itemId, // Use the actual database ID stored from product selection
-          description: line.description,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          discountPercent: newDiscountPercent, // Updated percent
-          amount: newAmount, // Updated net amount
-          warehouseId: line.warehouseId
-        };
+        if (line.unitPrice <= 0) {
+          validationErrors.push(`Baris ${index + 1}: Harga satuan harus > 0`);
+        }
       });
+
+      // Check for duplicate items (same itemId appears multiple times)
+      const itemIds = lines.filter(l => l.itemId).map(l => l.itemId);
+      const duplicates = itemIds.filter((id, idx) => itemIds.indexOf(id) !== idx);
+      if (duplicates.length > 0) {
+        validationErrors.push('Item duplikat terdeteksi. Harap gabungkan kuantitas untuk item yang sama.');
+      }
+
+      if (validationErrors.length > 0) {
+        addToast({
+          type: 'error',
+          title: 'Kesalahan Validasi',
+          message: validationErrors.join('\n'),
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Calculate Global Discount Distribution (Pro-ration)
+      const distributedLines = calculateDistributedLines();
 
       // Build payload for API
       const payload = {
@@ -439,7 +490,12 @@ export default function InvoiceForm({
         notes: formData.memo || '',
         status: 'UNPAID', // Default to UNPAID (Belum Lunas) instead of DRAFT
         createdBy: 'admin', // TODO: Get from auth context
-        lines: distributedLines
+        lines: distributedLines,
+        costs: otherCosts.map(cost => ({
+          accountId: cost.accountId,
+          amount: cost.amount,
+          notes: cost.notes || null
+        }))
       };
 
       if (initialData.id) {
@@ -562,12 +618,7 @@ export default function InvoiceForm({
                   <CustomerSelect
                     value={formData.vendorCode}
                     onChange={handleCustomerSelect}
-                    customers={customers.map(c => ({
-                      code: c.code || c.id,
-                      name: c.name,
-                      phone: c.phone || c.mobile,
-                      address: c.billingCity ? `${c.billingAddress}, ${c.billingCity}` : c.billingAddress
-                    }))}
+                    customers={mappedCustomers}
                   />
                 </div>
               </div>

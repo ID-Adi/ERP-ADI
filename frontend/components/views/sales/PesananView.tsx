@@ -15,10 +15,12 @@ import {
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
+import { useDebounce } from '@/hooks/useDebounce';
 import api from '@/lib/api';
 
 export default function PesananView() {
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchInput, setSearchInput] = useState('');
+    const searchQuery = useDebounce(searchInput, 500);
     const [statusFilter, setStatusFilter] = useState('All');
 
     const fetchSalesOrders = useCallback(async (page: number) => {
@@ -44,7 +46,7 @@ export default function PesananView() {
     });
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSearchQuery(e.target.value);
+        setSearchInput(e.target.value);
         reset();
     };
 
@@ -97,7 +99,7 @@ export default function PesananView() {
                         <input
                             type="text"
                             placeholder="Search..."
-                            value={searchQuery}
+                            value={searchInput}
                             onChange={handleSearchChange}
                             className="w-64 pl-3 pr-10 py-1.5 text-sm bg-white border border-surface-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 placeholder:text-warmgray-400"
                         />

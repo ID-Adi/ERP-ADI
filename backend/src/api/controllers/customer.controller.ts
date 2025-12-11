@@ -64,19 +64,39 @@ const customerSchema = z.object({
     isActive: z.boolean().optional(),
 });
 
-// GET /api/customers
+// GET /api/customers/dropdown - Lightweight endpoint for dropdowns (no pagination)
+router.get('/dropdown', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const user = (req as any).user;
+        const customers = await customerService.getCustomersForDropdown(user.companyId);
+        res.json({ data: customers });
+    } catch (error) {
+        console.error('Get customers dropdown error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// GET /api/customers - Paginated list for tables
 router.get('/', authenticateToken, async (req: Request, res: Response) => {
     try {
         const user = (req as any).user;
-        const { limit, search, status } = req.query;
+        const { page, limit, search, status } = req.query;
 
-        const customers = await customerService.getCompanyCustomers(user.companyId, {
-            limit: limit ? Number(limit) : undefined,
+        const result = await customerService.getCompanyCustomersPaginated(user.companyId, {
+            page: page ? Number(page) : 1,
+            limit: limit ? Number(limit) : 50,
             search: search as string,
             status: status as string
         });
 
-        res.json({ data: customers });
+        res.json({
+            data: result.data,
+            total: result.total,
+            page: page ? Number(page) : 1,
+            limit: limit ? Number(limit) : 50,
+            totalPages: Math.ceil(result.total / (limit ? Number(limit) : 50)),
+            hasMore: ((page ? Number(page) : 1) - 1) * (limit ? Number(limit) : 50) + result.data.length < result.total
+        });
     } catch (error) {
         console.error('Get customers error:', error);
         res.status(500).json({ message: 'Internal server error' });

@@ -6,7 +6,7 @@ import ProductDetailModal from './ProductDetailModal';
 import api from '@/lib/api';
 import { List, AutoSizer, CellMeasurer, CellMeasurerCache, InfiniteLoader } from 'react-virtualized';
 import 'react-virtualized/styles.css';
-import { debounce } from 'lodash';
+import { debounce } from '@/hooks/useDebounce';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Shared LineItem interface (should be centralized ideally)
@@ -15,6 +15,7 @@ interface LineItem {
     itemId?: string; // Database ID of the item (for backend)
     itemCode: string;
     description: string;
+    notes?: string;
     quantity: number;
     unit: string;
     unitPrice: number;
@@ -351,7 +352,8 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                     <thead className="bg-warmgray-50 sticky top-0 z-20 border-b border-warmgray-200">
                         <tr>
                             <th className="py-2 px-2 w-[30px] text-center font-semibold text-warmgray-600 border-r border-warmgray-200"></th>
-                            <th className="py-2 px-4 w-[350px] text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Barang & Jasa</th>
+                            <th className="py-2 px-4 w-[250px] text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Barang</th>
+                            <th className="py-2 px-4 w-[200px] text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Catatan</th>
                             <th className="py-2 px-4 text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Kode</th>
                             <th className="py-2 px-2 w-[70px] text-center font-semibold text-warmgray-600 border-r border-warmgray-200">Kuantitas</th>
                             <th className="py-2 px-2 w-[70px] text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Satuan</th>
@@ -365,13 +367,13 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                     <tbody className="divide-y divide-warmgray-100">
                         {items.length === 0 ? (
                             <tr>
-                                <td colSpan={10} className="py-12 text-center text-warmgray-400 italic">
+                                <td colSpan={11} className="py-12 text-center text-warmgray-400 italic">
                                     Belum ada barang dipilih. Gunakan pencarian di atas untuk menambahkan barang.
                                 </td>
                             </tr>
                         ) : filteredItems.length === 0 ? (
                             <tr>
-                                <td colSpan={10} className="py-12 text-center text-warmgray-400 italic">
+                                <td colSpan={11} className="py-12 text-center text-warmgray-400 italic">
                                     Tidak ada barang yang cocok dengan pencarian &quot;{tableSearch}&quot;.
                                 </td>
                             </tr>
@@ -384,6 +386,7 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                                 >
                                     <td className="py-1.5 px-2 text-center text-warmgray-400 border-r border-warmgray-100">=</td>
                                     <td className="py-1.5 px-3 font-medium text-warmgray-900 border-r border-warmgray-100">{item.description}</td>
+                                    <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100 italic">{item.notes || '-'}</td>
                                     <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{item.itemCode}</td>
                                     <td className="py-1.5 px-3 text-right text-warmgray-900 border-r border-warmgray-100">{item.quantity}</td>
                                     <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{item.unit}</td>

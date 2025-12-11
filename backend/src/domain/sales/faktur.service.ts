@@ -34,114 +34,157 @@ export class FakturService {
         return candidate;
     }
 
-    // Helper: Validate Stock
+    // Helper: Validate Stock - OPTIMIZED with batch fetching
     private async validateStock(tx: Prisma.TransactionClient, lines: any[]) {
-        // Cache default warehouse to avoid repeated queries if needed
+        // Filter lines that need stock validation
+        const validLines = lines.filter(line => line.itemId && line.quantity);
+        if (validLines.length === 0) return;
+
+        // Batch fetch all items at once
+        const itemIds = [...new Set(validLines.map(l => l.itemId))];
+        const items = await tx.item.findMany({
+            where: { id: { in: itemIds } }
+        });
+        const itemMap = new Map(items.map(i => [i.id, i]));
+
+        // Get companyId from first stock item for default warehouse lookup
+        const stockItems = items.filter(i => i.isStockItem);
+        if (stockItems.length === 0) return;
+
+        // Get default warehouse (one query)
         let defaultWarehouseId: string | null = null;
+        const companyId = stockItems[0].companyId;
+        const defWh = await tx.warehouse.findFirst({ where: { companyId } });
+        if (defWh) defaultWarehouseId = defWh.id;
 
-        for (const line of lines) {
-            if (!line.itemId || !line.quantity) continue;
+        // Collect all warehouse IDs needed
+        const warehouseIds = new Set<string>();
+        for (const line of validLines) {
+            const item = itemMap.get(line.itemId);
+            if (!item || !item.isStockItem) continue;
+            const warehouseId = line.warehouseId || defaultWarehouseId;
+            if (warehouseId) warehouseIds.add(warehouseId);
+        }
+
+        // Batch fetch all stocks at once
+        const stocks = await tx.itemStock.findMany({
+            where: {
+                itemId: { in: itemIds },
+                warehouseId: { in: Array.from(warehouseIds) }
+            }
+        });
+        const stockMap = new Map(stocks.map(s => [`${s.itemId}-${s.warehouseId}`, s]));
+
+        // Validate each line (no more queries needed)
+        for (const line of validLines) {
             const quantity = Number(line.quantity);
-
-            const item = await tx.item.findUnique({ where: { id: line.itemId } });
+            const item = itemMap.get(line.itemId);
             if (!item || !item.isStockItem) continue;
 
-            // Determine warehouse: Line specific > Default
-            let warehouseId = line.warehouseId;
-            if (!warehouseId) {
-                if (!defaultWarehouseId) {
-                    const defWh = await tx.warehouse.findFirst({ where: { companyId: item.companyId } });
-                    if (defWh) defaultWarehouseId = defWh.id;
-                }
-                warehouseId = defaultWarehouseId;
-            }
-
+            const warehouseId = line.warehouseId || defaultWarehouseId;
             if (!warehouseId) throw new Error(`Gudang tidak ditentukan untuk item: ${item.name}`);
 
-            const stock = await tx.itemStock.findUnique({
-                where: {
-                    itemId_warehouseId: {
-                        itemId: line.itemId,
-                        warehouseId: warehouseId
-                    }
-                }
-            });
-
+            const stock = stockMap.get(`${line.itemId}-${warehouseId}`);
             const available = stock ? Number(stock.availableStock) : 0;
+
             if (available < quantity) {
                 throw new Error(`Stok tidak mencukupi untuk item: ${item.name} di gudang terpilih. Tersedia: ${available}, Diminta: ${quantity}`);
             }
         }
     }
 
-    // Helper: Update Stock
+    // Helper: Update Stock - OPTIMIZED with batch fetching
     private async updateStock(tx: Prisma.TransactionClient, lines: any[], direction: 'IN' | 'OUT') {
+        // Filter lines that need stock update
+        const validLines = lines.filter(line => line.itemId && line.quantity);
+        if (validLines.length === 0) return;
+
+        // Batch fetch all items at once
+        const itemIds = [...new Set(validLines.map(l => l.itemId))];
+        const items = await tx.item.findMany({
+            where: { id: { in: itemIds } }
+        });
+        const itemMap = new Map(items.map(i => [i.id, i]));
+
+        // Get companyId from first stock item for default warehouse lookup
+        const stockItems = items.filter(i => i.isStockItem);
+        if (stockItems.length === 0) return;
+
+        // Get default warehouse (one query)
         let defaultWarehouseId: string | null = null;
+        const companyId = stockItems[0].companyId;
+        const defWh = await tx.warehouse.findFirst({ where: { companyId } });
+        if (defWh) defaultWarehouseId = defWh.id;
 
-        for (const line of lines) {
-            if (!line.itemId || !line.quantity) continue;
+        // Collect all warehouse IDs needed
+        const warehouseIds = new Set<string>();
+        for (const line of validLines) {
+            const item = itemMap.get(line.itemId);
+            if (!item || !item.isStockItem) continue;
+            const warehouseId = line.warehouseId || defaultWarehouseId;
+            if (warehouseId) warehouseIds.add(warehouseId);
+        }
 
-            const item = await tx.item.findUnique({ where: { id: line.itemId } });
+        // Batch fetch all stocks at once
+        const stocks = await tx.itemStock.findMany({
+            where: {
+                itemId: { in: itemIds },
+                warehouseId: { in: Array.from(warehouseIds) }
+            }
+        });
+        const stockMap = new Map(stocks.map(s => [`${s.itemId}-${s.warehouseId}`, s]));
+
+        // Prepare batch updates and creates
+        const stockUpdates: { id: string; change: number }[] = [];
+        const stockCreates: { itemId: string; warehouseId: string; quantity: number }[] = [];
+
+        for (const line of validLines) {
+            const item = itemMap.get(line.itemId);
             if (!item || !item.isStockItem) continue;
 
-            // Determine warehouse
-            let warehouseId = line.warehouseId;
-            if (!warehouseId) {
-                if (!defaultWarehouseId) {
-                    const defWh = await tx.warehouse.findFirst({ where: { companyId: item.companyId } });
-                    if (defWh) defaultWarehouseId = defWh.id;
-                }
-                warehouseId = defaultWarehouseId;
-            }
-
+            const warehouseId = line.warehouseId || defaultWarehouseId;
             if (!warehouseId) throw new Error(`Gudang tidak ditentukan untuk item: ${item.name}`);
 
             const quantity = Number(line.quantity);
             const change = direction === 'IN' ? quantity : -quantity;
 
-            const stock = await tx.itemStock.findUnique({
-                where: {
-                    itemId_warehouseId: {
-                        itemId: line.itemId,
-                        warehouseId: warehouseId
-                    }
-                }
-            });
-
+            const stock = stockMap.get(`${line.itemId}-${warehouseId}`);
             if (stock) {
-                await tx.itemStock.update({
-                    where: { id: stock.id },
-                    data: {
-                        currentStock: { increment: change },
-                        availableStock: { increment: change }
-                    }
-                });
+                stockUpdates.push({ id: stock.id, change });
             } else {
-                if (direction === 'IN') { // Should receive stock
-                    await tx.itemStock.create({
-                        data: {
-                            itemId: line.itemId,
-                            warehouseId: warehouseId,
-                            currentStock: quantity,
-                            availableStock: quantity
-                        }
-                    });
-                } else {
-                    // Force create negative stock if allowed/needed
-                    await tx.itemStock.create({
-                        data: {
-                            itemId: line.itemId,
-                            warehouseId: warehouseId,
-                            currentStock: change,
-                            availableStock: change
-                        }
-                    });
-                }
+                stockCreates.push({
+                    itemId: line.itemId,
+                    warehouseId,
+                    quantity: direction === 'IN' ? quantity : change
+                });
             }
+        }
+
+        // Execute batch updates (can't truly batch Prisma updates, but we can parallelize)
+        await Promise.all(stockUpdates.map(({ id, change }) =>
+            tx.itemStock.update({
+                where: { id },
+                data: {
+                    currentStock: { increment: change },
+                    availableStock: { increment: change }
+                }
+            })
+        ));
+
+        // Execute batch creates
+        if (stockCreates.length > 0) {
+            await tx.itemStock.createMany({
+                data: stockCreates.map(({ itemId, warehouseId, quantity }) => ({
+                    itemId,
+                    warehouseId,
+                    currentStock: quantity,
+                    availableStock: quantity
+                }))
+            });
         }
     }
 
-    // Helper: Create Journal Entries
+    // Helper: Create Journal Entries - OPTIMIZED with batch fetching
     private async createJournalEntries(tx: Prisma.TransactionClient, faktur: any, lines: any[], companyId: string) {
         // 1. Sales & AR Journal
         // DEBIT: AR (Piutang)
@@ -154,6 +197,38 @@ export class FakturService {
         const arAccount = customer.receivableAccountId;
         if (!arAccount) throw new Error(`Customer ${customer.name} missing Receivable Account setting.`);
 
+        // Filter lines with itemId
+        const validLines = lines.filter(l => l.itemId);
+        const itemIds = [...new Set(validLines.map(l => l.itemId))];
+
+        // Batch fetch all items with their accounts and categories in one query
+        const items = await tx.item.findMany({
+            where: { id: { in: itemIds } },
+            include: {
+                accounts: true,
+                category: { include: { hppAccount: true } }
+            }
+        });
+        const itemMap = new Map(items.map(i => [i.id, i]));
+
+        // Batch fetch all item pricing (PURCHASE type) at once
+        const itemPricings = await tx.itemPricing.findMany({
+            where: {
+                itemId: { in: itemIds },
+                priceType: 'PURCHASE'
+            }
+        });
+        const pricingMap = new Map(itemPricings.map(p => [p.itemId, p]));
+
+        // Batch fetch all primary suppliers at once
+        const suppliers = await tx.itemSupplier.findMany({
+            where: {
+                itemId: { in: itemIds },
+                isPrimary: true
+            }
+        });
+        const supplierMap = new Map(suppliers.map(s => [s.itemId, s]));
+
         const journalLines = [];
 
         // Debit AR
@@ -164,61 +239,34 @@ export class FakturService {
             credit: 0
         });
 
-        // Credit Sales & Tax
-        // We need to group sales by account to avoid spamming lines if same account
-        // For simplicity, we iterate lines.
-
-        let totalSales = 0;
-
         // Group by Sales Account
         const salesByAccount: Record<string, number> = {};
         const cogsByItem: Array<{ itemId: string, qty: number, cost: number }> = [];
 
-        for (const line of lines) {
-            if (!line.itemId) continue; // Skip non-item lines?
-
-            const item = await tx.item.findUnique({
-                where: { id: line.itemId },
-                include: {
-                    accounts: true,
-                    category: { include: { hppAccount: true } } // Fallback for COGS
-                }
-            });
+        for (const line of validLines) {
+            const item = itemMap.get(line.itemId);
             if (!item) continue;
 
-            // Find Sales Account: Item Specific -> Category (Not in schema yet) -> Customer Default -> Global Default?
-            // Helper logic for account resolution
+            // Find Sales Account: Item Specific -> Customer Default
             let salesAccountId = item.accounts.find(a => a.accountType === 'SALES')?.accountId;
             if (!salesAccountId) salesAccountId = customer.salesAccountId || undefined;
 
             if (!salesAccountId) {
-                // Fallback to strict error or default?
-                // For now, stricter:
                 throw new Error(`No Sales Account found for item ${item.name} or Customer ${customer.name}`);
             }
 
-            const lineApparentTotal = Number(line.amount); // After discount
+            const lineApparentTotal = Number(line.amount);
             salesByAccount[salesAccountId] = (salesByAccount[salesAccountId] || 0) + lineApparentTotal;
-            totalSales += lineApparentTotal;
 
-            // Prepare COGS data
-            // Cost Estimation: simple avg or last purchase.
-            // Schema check: ItemSupplier has lastPurchasePrice.
-            // Or ItemPricing?
-            // Let's check ItemPricing for PURCHASE type
-            const purchasePriceRaw = await tx.itemPricing.findFirst({
-                where: { itemId: item.id, priceType: 'PURCHASE' }
-            });
+            // Get cost from pre-fetched data
+            const pricing = pricingMap.get(item.id);
+            const supplier = supplierMap.get(item.id);
 
-            // Fallback to ItemSupplier
             let cost = 0;
-            if (purchasePriceRaw) {
-                cost = Number(purchasePriceRaw.price);
-            } else {
-                const supplierItem = await tx.itemSupplier.findFirst({ where: { itemId: item.id, isPrimary: true } });
-                if (supplierItem && supplierItem.purchasePrice) {
-                    cost = Number(supplierItem.purchasePrice);
-                }
+            if (pricing) {
+                cost = Number(pricing.price);
+            } else if (supplier?.purchasePrice) {
+                cost = Number(supplier.purchasePrice);
             }
 
             if (cost > 0 && item.isStockItem) {
@@ -240,16 +288,8 @@ export class FakturService {
             });
         }
 
-        // Credit Tax (If any) - Wait, subtotal vs total. 
-        // Logic above used 'amount' which usually includes tax? Or is tax separate?
-        // Schema: subtotal, taxAmount, totalAmount.
-        // Usually line.amount is subtotal-ish.
-        // Let's assume line.amount is exclusive of global tax, but might include line tax?
-        // In this simple schema, tax is global on the invoice (taxPercent/taxAmount).
-        // So sales lines sum to Subtotal (less line discounts).
-
+        // Credit Tax (If any)
         if (Number(faktur.taxAmount) > 0) {
-            // Find Tax Payable Account
             const taxAccount = await tx.account.findFirst({
                 where: {
                     companyId,
@@ -291,31 +331,22 @@ export class FakturService {
             }
         });
 
-        // 2. COGS & Inventory Journal
-        // DEBIT: COGS (HPP)
-        // CREDIT: Inventory (Persediaan)
-
+        // 2. COGS & Inventory Journal (using pre-fetched item data)
         const cogsLines = [];
 
         for (const itemData of cogsByItem) {
-            const item = await tx.item.findUnique({
-                where: { id: itemData.itemId },
-                include: { accounts: true, category: { include: { hppAccount: true } } }
-            });
+            const item = itemMap.get(itemData.itemId);
             if (!item) continue;
 
             const totalCost = itemData.qty * itemData.cost;
             if (totalCost === 0) continue;
 
-            // Resolve Accounts
-            // COGS Account
+            // Resolve Accounts (already have accounts from batch fetch)
             let cogsAccountId = item.accounts.find(a => a.accountType === 'COGS')?.accountId;
             if (!cogsAccountId) cogsAccountId = item.category?.hppAccountId || undefined;
             if (!cogsAccountId) cogsAccountId = customer.cogsAccountId || undefined;
 
-            // Inventory Account
             let inventoryAccountId = item.accounts.find(a => a.accountType === 'INVENTORY')?.accountId;
-            // Fallback for inventory account needed? Maybe category?
 
             if (cogsAccountId && inventoryAccountId) {
                 cogsLines.push({
@@ -471,12 +502,16 @@ export class FakturService {
                     lines: {
                         create: data.lines.map((l: any) => ({
                             itemId: l.itemId,
-                            description: l.description || "Item",
+                            itemName: l.description || "Item",
+                            description: l.notes || null,
+                            unit: l.unit,
                             quantity: l.quantity,
                             unitPrice: l.unitPrice,
                             discountPercent: l.discountPercent,
+                            discountAmount: l.discountAmount,
                             amount: l.amount,
-                            warehouseId: l.warehouseId
+                            warehouseId: l.warehouseId,
+                            salespersonId: l.salespersonId || undefined
                         }))
                     },
                     costs: data.costs ? {
@@ -561,12 +596,16 @@ export class FakturService {
                     lines: {
                         create: data.lines.map((l: any) => ({
                             itemId: l.itemId,
-                            description: l.description || "Item",
+                            itemName: l.description || "Item",
+                            description: l.notes || null,
+                            unit: l.unit,
                             quantity: l.quantity,
                             unitPrice: l.unitPrice,
                             discountPercent: l.discountPercent,
+                            discountAmount: l.discountAmount,
                             amount: l.amount,
-                            warehouseId: l.warehouseId
+                            warehouseId: l.warehouseId,
+                            salespersonId: l.salespersonId || undefined
                         }))
                     },
                     costs: data.costs ? {

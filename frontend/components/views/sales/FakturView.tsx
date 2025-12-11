@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { useTabContext } from '@/contexts/TabContext';
 import api from '@/lib/api';
 import InfiniteScroll from 'react-infinite-scroll-component';
+import { useDebounce } from '@/hooks/useDebounce';
 
 import InvoiceForm from '@/components/business/InvoiceForm';
 import { createPortal } from 'react-dom';
@@ -55,7 +56,8 @@ export default function FakturView() {
 
 
     // --- Data Fetching State ---
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchInput, setSearchInput] = useState(''); // User input (immediate)
+    const searchQuery = useDebounce(searchInput, 500); // Debounced search query
     const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
     const [customerFilter, setCustomerFilter] = useState('');
     const [statusFilters, setStatusFilters] = useState<string[]>([]);
@@ -130,7 +132,7 @@ export default function FakturView() {
     };
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSearchQuery(e.target.value);
+        setSearchInput(e.target.value); // Update immediate input (debounce happens via hook)
     };
 
     const handleStatusFilterChange = (selectedStatuses: string[]) => {
@@ -352,7 +354,7 @@ export default function FakturView() {
                         <input
                             type="text"
                             placeholder=""
-                            value={searchQuery}
+                            value={searchInput}
                             onChange={handleSearchChange}
                             className="w-32 px-2 py-1.5 text-sm bg-white border-l border-surface-200 focus:outline-none focus:ring-0 placeholder:text-warmgray-400"
                         />
@@ -475,9 +477,10 @@ const transformInvoiceData = (apiData: any) => {
             id: line.id,
             itemId: line.itemId,
             itemCode: line.item?.code || '',
-            description: line.description,
+            description: line.itemName || line.description || 'Item',
+            notes: line.description || '', // Map User Notes
             quantity: Number(line.quantity),
-            unit: line.item?.uom || 'PCS',
+            unit: line.unit || line.item?.uom || 'PCS',
             unitPrice: Number(line.unitPrice),
             discountPercent: Number(line.discountPercent || 0),
             discountAmount: Number(line.discountAmount || 0),
@@ -487,8 +490,8 @@ const transformInvoiceData = (apiData: any) => {
             totalAmount: Number(line.amount),
             warehouseId: line.warehouseId, // Map Warehouse ID
             warehouseName: line.warehouse?.name, // Map Warehouse Name for display
-            salespersonId: apiData.salespersonId, // Line inherits invoice salesperson if not specific
-            salespersonName: apiData.salesperson?.name // Map Salesperson Name
+            salespersonId: line.salespersonId || apiData.salespersonId, // Line inherits invoice salesperson if not specific
+            salespersonName: line.salesperson?.name || apiData.salesperson?.name // Map Salesperson Name
         })) || [],
     };
 };
