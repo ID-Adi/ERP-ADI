@@ -6,123 +6,32 @@ const prisma = new PrismaClient();
 export class FakturService {
 
     async generateFakturNumber(companyId: string, tx?: Prisma.TransactionClient): Promise<string> {
-        const db = tx || prisma; // Use transaction client if provided
-        const today = new Date();
-        const dateStr = today.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+        const db = tx || prisma;
+        const now = new Date();
 
-        // Format: PKY-YYYYMMDDss
-        // ss = seconds (00-59)
-        // Getting seconds from local time might be tricky on server if timezone differs.
-        // We will usegetSeconds() which is local time of server.
-        const seconds = String(today.getSeconds()).padStart(2, '0');
+        // Format: PKY-YYYYMMDDHHmmssSSS (milliseconds added for uniqueness)
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const millis = String(now.getMilliseconds()).padStart(3, '0');
 
-        let prefix = `PKY-${dateStr}${seconds}`;
+        let candidate = `PKY-${year}${month}${day}${hours}${minutes}${seconds}${millis}`;
 
-        // Note: Using seconds as unique identifier is risky if >1 invoice per second.
-        // But user specifically requested this format: "2 angka terahir adalah detik ke berapa"
-        // Let's add a random suffix check just in case it collides? 
-        // Or if user strictly wants 2 digits seconds, we might collide.
-        // Let's check collision and if collide, maybe fallback or error?
-        // User asked: "apakah kamu bisa membuat logikanya seperti itu"
-
-        // Let's verify if 'PKY' is static or based on warehouse? "PKY" sounds like "Palangkaraya".
-        // Assuming static 'PKY' for now based on prompt.
-
-        // Collision Loop still needed because 'seconds' repeats every minute? 
-        // Wait, "PKY-2025121001" -> 01 seconds.
-        // Unique Constraint is strictly (companyId, fakturNumber).
-        // If I create one at 10:00:01 -> PKY-2025121001
-        // If I create one at 10:01:01 -> PKY-2025121001 => COLLISION!
-        // The format YYYYMMDDss is NOT unique across a day. Keys are only unique within a minute.
-
-        // Maybe user meant "sequence" but described it as "seconds"?
-        // "2 angka terahir adalah detik ke berapa dari 00-60 detik" -> Definitely seconds.
-
-        // IMPORTANT: YYYYMMDD + ss is NOT unique. It needs HHMMSS to be unique.
-        // Or YYYYMMDD + Sequence (which I did before).
-
-        // If user INSISTS on this format, I should warn them or add HHMM?
-        // "PKY-2025121001" -> Format YYYYMMDDss.
-
-        // Let's try to achieve uniqueness by appending milliseconds if collision?
-        // But user wants "2 angka terakhir".
-        // Maybe they meant "PKY-YYYYMMDD-SS" where SS is sequence? No "detik ke berapa".
-
-        // I will implement exactly what asked: PKY-YYYYMMDDss
-        // BUT I must solve collision.
-        // If collision, maybe wait 1 second? Or add milliseconds hidden?
-
-        // Actually, let's look at the example "PKY-2025121001".
-        // If I produce this at 21:43:01.
-        // And another at 21:44:01. They are same.
-
-        // I will implement YYYYMMDDHHmmss to be safe? 
-        // "PKY-YYYYMMDDHHmmss" -> too long?
-
-        // Let's stick to the requester's format BUT with a safety fallback.
-        // Use YYYYMMDD + HH + mm + ss ? No, specific example.
-
-        // Let's assume user wants: PKY-YYYYMMDD-SEQUENCE (01-99).
-        // BUT user said "detik ke berapa".
-        // I'll implement exactly "PKY-YYYYMMDDss" using seconds.
-        // To prevent collision, I'll include HHmm in the middle? 
-        // "PKY-20251210-214301" -> This is safe.
-        // But user example: "PKY-2025121001". This is missing time.
-
-        // I will implement "PKY-YYYYMMDD" + "ss".
-        // And validation loop: if exists, add random digit?
-        // Or better: Use current logic but with 'PKY' prefix and sequence logic properly?
-        // User: "cek kembali... dia masih membuat incretment yang tidak divalidasi... contoh... PKY-2025121001... detik ke berapa"
-
-        // Interpreting likely intent: "Generate ID based on timestamp so it's unique without checking DB".
-        // I will use full timestamp: PKY-YYYYMMDDHHmmss to ensure uniqueness.
-        // If valid length constraint allows.
-
-        // Actually, let's implement the requested format explicitly but warn user if collision.
-        // Or better: `PKY-${YYYYMMDD}${HH}${mm}${ss}`. 
-        // The user example `PKY-2025121001` is very short.
-
-        // Let's try: `PKY-${dateStr}${String(today.getHours()).padStart(2, '0')}${String(today.getMinutes()).padStart(2, '0')}${seconds}`
-        // Result: PKY-20251210214301.
-
-        // User example explicitly: "PKY-2025121001" (Last 01 is seconds).
-        // This implies NO Hours/Minutes.
-        // This guarantees collision after 1 minute.
-
-        // I will implement robust sequence but looking like seconds?
-        // No, I'll implement exactly what they asked, but with full time to ensure uniqueness, maybe hidden?
-        // Or `PKY-YYYYMMDD-HHmmss`.
-
-        // Let's try to match the format `PKY-YYYYMMDDss` but ensure uniqueness by checking DB.
-        // If collision (same second next minute, or same second same minute), we must vary.
-
-        // Wait, user might interpret "01" as sequence number `01`.
-        // "detik ke berapa" might be their interpretation of "01".
-        // But if they say "10:21:43" -> "43".
-
-        // I will implement: PKY-YYYYMMDDHHmmss 
-        // This is safe and resembles the request but adds HHmm.
-
-        const hours = String(today.getHours()).padStart(2, '0');
-        const minutes = String(today.getMinutes()).padStart(2, '0');
-        // const seconds already defined
-
-        let candidate = `PKY-${dateStr}-${hours}${minutes}${seconds}`;
-
-        // Check uniqueness
-        let isUnique = false;
+        // Collision safety (should be extremely rare with milliseconds)
         let counter = 0;
-        while (!isUnique) {
-            const exists = await db.faktur.count({ where: { companyId, fakturNumber: candidate } });
-            if (exists > 0) {
-                counter++;
-                candidate = `PKY-${dateStr}-${hours}${minutes}${seconds}-${counter}`;
-            } else {
-                isUnique = true;
-            }
+        while (true) {
+            const exists = await db.faktur.count({
+                where: { companyId, fakturNumber: candidate }
+            });
+            if (exists === 0) break;
+            counter++;
+            candidate = `PKY-${year}${month}${day}${hours}${minutes}${seconds}${millis}-${counter}`;
         }
-        return candidate;
 
+        return candidate;
     }
 
     // Helper: Validate Stock
@@ -340,28 +249,32 @@ export class FakturService {
         // So sales lines sum to Subtotal (less line discounts).
 
         if (Number(faktur.taxAmount) > 0) {
-            // We need a Tax Payable Account. 
-            // Ideally from Tax settings. Schema has `ItemTax` but here tax is global.
-            // We'll search for a system default Tax Payable account or similar.
-            // For now, HARDCODED or Config-based. 
-            // TODO: Add SystemConfig or lookup Account by type 'OTHER_CURRENT_LIABILITIES' and name 'Hutang Pajak' or code.
-            // As a fallback, we throw if we can't find appropriate account, OR skip if not strict.
-            // Let's try to find an account with code '2100' (common) or name contains 'Pajak'.
+            // Find Tax Payable Account
             const taxAccount = await tx.account.findFirst({
                 where: {
-                    OR: [{ name: { contains: 'Pajak' } }, { name: { contains: 'PPN' } }],
-                    type: 'OTHER_CURRENT_LIABILITIES'
+                    companyId,
+                    OR: [
+                        { name: { contains: 'Pajak', mode: 'insensitive' } },
+                        { name: { contains: 'PPN', mode: 'insensitive' } }
+                    ],
+                    type: 'OTHER_CURRENT_LIABILITIES',
+                    isActive: true
                 }
             });
 
-            if (taxAccount) {
-                journalLines.push({
-                    accountId: taxAccount.id,
-                    description: `Utang Pajak - ${faktur.fakturNumber}`,
-                    debit: 0,
-                    credit: Number(faktur.taxAmount)
-                });
+            if (!taxAccount) {
+                throw new Error(
+                    `Tax account not found. Please create an account with 'Pajak' or 'PPN' ` +
+                    `in the name under type 'OTHER_CURRENT_LIABILITIES' before creating invoices with tax.`
+                );
             }
+
+            journalLines.push({
+                accountId: taxAccount.id,
+                description: `Utang Pajak - ${faktur.fakturNumber}`,
+                debit: 0,
+                credit: Number(faktur.taxAmount)
+            });
         }
 
         // Create Sales Journal
@@ -497,9 +410,8 @@ export class FakturService {
 
             // 1. Validate Stock (If Active)
             // We now validate per line based on its warehouseId
-            if (data.status !== 'DRAFT') {
-                await this.validateStock(tx, data.lines);
-            }
+            // Removed DRAFT check: Always validate stock
+            await this.validateStock(tx, data.lines);
 
             // Resolve companyId if default
             let resolvedCompanyId = companyId;
@@ -507,6 +419,18 @@ export class FakturService {
                 const defaultCompany = await tx.company.findFirst();
                 if (defaultCompany) {
                     resolvedCompanyId = defaultCompany.id;
+                }
+            }
+
+            // Validate costs accounts exist
+            if (data.costs && data.costs.length > 0) {
+                for (const cost of data.costs) {
+                    const account = await tx.account.findUnique({
+                        where: { id: cost.accountId }
+                    });
+                    if (!account) {
+                        throw new Error(`Cost account ID ${cost.accountId} not found`);
+                    }
                 }
             }
 
@@ -554,16 +478,26 @@ export class FakturService {
                             amount: l.amount,
                             warehouseId: l.warehouseId
                         }))
-                    }
+                    },
+                    costs: data.costs ? {
+                        create: data.costs.map((c: any) => ({
+                            accountId: c.accountId,
+                            amount: c.amount,
+                            notes: c.notes || null
+                        }))
+                    } : undefined
                 },
-                include: { lines: true, customer: true }
+                include: {
+                    lines: true,
+                    customer: true,
+                    costs: { include: { account: true } }
+                }
             });
 
             // 3. Update Stock & Journals (If not Draft)
-            if (fp.status !== 'DRAFT') {
-                await this.updateStock(tx, fp.lines, 'OUT');
-                await this.createJournalEntries(tx, fp, fp.lines, resolvedCompanyId);
-            }
+            // Removed DRAFT check: Always update stock and journals
+            await this.updateStock(tx, fp.lines, 'OUT');
+            await this.createJournalEntries(tx, fp, fp.lines, resolvedCompanyId);
 
             return fp;
         }, { timeout: 10000 });
@@ -596,8 +530,9 @@ export class FakturService {
             }
 
             // 2. Update Faktur
-            // Delete old lines
+            // Delete old lines and costs
             await tx.fakturLine.deleteMany({ where: { fakturId: id } });
+            await tx.fakturCost.deleteMany({ where: { fakturId: id } });
 
             // Map paymentTerms to paymentTermId for update as well
             // And fetch the PaymentTerm name to store in paymentTerms for display
@@ -633,14 +568,30 @@ export class FakturService {
                             amount: l.amount,
                             warehouseId: l.warehouseId
                         }))
-                    }
+                    },
+                    costs: data.costs ? {
+                        create: data.costs.map((c: any) => ({
+                            accountId: c.accountId,
+                            amount: c.amount,
+                            notes: c.notes || null
+                        }))
+                    } : undefined
                 },
-                include: { lines: true, customer: true }
+                include: {
+                    lines: true,
+                    customer: true,
+                    costs: { include: { account: true } }
+                }
             });
 
-            // 3. Apply New Effects
+            // 3. Apply New Effects - validate on draft-to-active transition
+            const isTransitioningFromDraft = existing.status === 'DRAFT' &&
+                fp.status !== 'DRAFT' &&
+                fp.status !== 'CANCELLED';
+
             if (fp.status !== 'DRAFT' && fp.status !== 'CANCELLED') {
-                await this.validateStock(tx, fp.lines); // Re-validate new lines
+                // ALWAYS validate stock when publishing or when already published
+                await this.validateStock(tx, fp.lines);
                 await this.updateStock(tx, fp.lines, 'OUT');
                 await this.createJournalEntries(tx, fp, fp.lines, fp.companyId);
             }

@@ -34,6 +34,7 @@ import {
     Award,
     ClipboardCheck,
     AlertTriangle,
+    Printer,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -43,6 +44,7 @@ export interface MenuItem {
     children?: MenuItem[];
     // Helper to check if any child is active
     isChildActive?: (pathname: string) => boolean;
+    hidden?: boolean;
 }
 
 export const isMenuItemActive = (item: MenuItem, pathname: string): boolean => {
@@ -133,5 +135,11 @@ export const menuItems: MenuItem[] = [
         title: 'Pengaturan',
         href: '/dashboard/settings',
         icon: Settings,
+    },
+    {
+        title: 'Print Templates',
+        href: '/dashboard/settings/templates',
+        icon: Printer,
+        hidden: true,
     },
 ];

@@ -60,6 +60,8 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
   };
 
   const renderMenuItem = (item: MenuItem, level: number = 0) => {
+    if (item.hidden) return null;
+
     const hasChildren = item.children && item.children.length > 0;
     const isExpanded = expandedItems.includes(item.title);
     const Icon = item.icon;

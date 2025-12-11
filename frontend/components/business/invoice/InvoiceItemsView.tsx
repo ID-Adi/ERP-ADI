@@ -269,9 +269,21 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                                 className="absolute z-50 w-full mt-1 bg-white border border-warmgray-300 rounded-md shadow-lg h-80 overflow-hidden"
                             >
                                 {isInitialLoading ? (
-                                    <div className="flex flex-col items-center justify-center h-full text-warmgray-400 gap-2">
-                                        <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
-                                        <span className="text-sm">Mencari barang...</span>
+                                    <div className="flex flex-col">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <div key={i} className="px-4 py-3 border-b border-warmgray-50">
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <div className="h-4 w-48 rounded animate-shimmer mb-2"></div>
+                                                        <div className="h-3 w-24 rounded animate-shimmer"></div>
+                                                    </div>
+                                                    <div className="flex flex-col items-end gap-2">
+                                                        <div className="h-4 w-24 rounded animate-shimmer"></div>
+                                                        <div className="h-3 w-16 rounded animate-shimmer"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 ) : products.length > 0 ? (
                                     <InfiniteLoader

@@ -15,6 +15,7 @@ import salespersonRoutes from './controllers/salesperson.controller';
 import employeeRoutes from './controllers/employee.controller';
 
 import paymentTermRoutes from './controllers/paymentTerm.routes';
+import templateRoutes from './controllers/template.controller';
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use('/sales-receipts', salesReceiptRoutes);
 router.use('/salespersons', salespersonRoutes);
 router.use('/employees', employeeRoutes);
 router.use('/payment-terms', paymentTermRoutes);
+router.use('/templates', templateRoutes);
 
 export default router;

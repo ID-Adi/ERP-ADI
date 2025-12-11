@@ -75,8 +75,10 @@ router.get('/', async (req: Request, res: Response) => {
                 notes: true,
                 createdBy: true,
                 totalAmount: true,
+                discountAmount: true,
                 amountPaid: true,
                 status: true,
+                updatedAt: true,
                 customer: {
                     select: {
                         name: true
@@ -90,6 +92,18 @@ router.get('/', async (req: Request, res: Response) => {
             }
         });
 
+
+
+        const calculateAge = (fakturDate: Date, status: string, updatedAt: Date) => {
+            let end = new Date();
+            if (status === 'PAID') {
+                end = new Date(updatedAt);
+            }
+            const diffTime = end.getTime() - fakturDate.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays > 0 ? diffDays : 0;
+        };
+
         // Shape data for frontend
         const formattedFakturs = fakturs.map(faktur => ({
             id: faktur.id,
@@ -100,8 +114,11 @@ router.get('/', async (req: Request, res: Response) => {
             salesPerson: faktur.salesperson?.name || '-', // Use actual salesperson name
             total: Number(faktur.totalAmount),
             totalAmount: Number(faktur.totalAmount),
+            totalDiscount: Number(faktur.discountAmount),
             amountPaid: Number(faktur.amountPaid),
-            status: faktur.status
+            status: faktur.status,
+            updatedAt: faktur.updatedAt,
+            age: calculateAge(faktur.fakturDate, faktur.status, faktur.updatedAt)
         }));
 
         res.json({
@@ -134,6 +151,11 @@ router.get('/:id', async (req: Request, res: Response) => {
                     include: {
                         item: true,
                         warehouse: true // Include warehouse data for each line
+                    }
+                },
+                costs: {
+                    include: {
+                        account: true // Include account data for each cost
                     }
                 },
                 salesOrder: true

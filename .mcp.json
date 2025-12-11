@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "server-postgres",
+      "args": ["postgresql://postgres:anandakeren@localhost:5433/erp_adi"]
+    }
+  }
+}

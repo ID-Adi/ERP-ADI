@@ -5,6 +5,7 @@ import { Menu, X } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { TabBars } from './TabBar';
+import ViewManager from './ViewManager';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -52,7 +53,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Content Area - Full width, no max-w constraint */}
         <main className="flex-1 flex flex-col overflow-hidden bg-surface-100">
           <div className="flex-1 flex flex-col min-h-0">
-            {children}
+            <ViewManager>{children}</ViewManager>
           </div>
         </main>
       </div>

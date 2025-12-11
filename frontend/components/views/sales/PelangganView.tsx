@@ -1,11 +1,144 @@
 'use client';
 
-import PelangganView from '@/components/views/sales/PelangganView';
+import { useState, useCallback, useEffect } from 'react';
+import {
+    Plus,
+    RefreshCw,
+    Search,
+    Filter,
+    MoreHorizontal,
+    Trash2,
+    FileText,
+    ArrowUpDown
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import api from '@/lib/api';
+import { useTabContext } from '@/contexts/TabContext';
+import CustomerForm from '@/components/sales/CustomerForm';
 
-export default function CustomerPage() {
-    return <PelangganView />;
+export default function PelangganView() {
+    const {
+        openDataTab,
+        closeDataTab,
+        getActiveDataTab,
+        updateDataTabData,
+        markDataTabDirty
+    } = useTabContext();
+    const featureId = '/dashboard/sales/pelanggan';
+
+    // Data State
+    const [customers, setCustomers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+
+    // Derived state from TabContext
+    const activeDataTab = getActiveDataTab();
+    const activeTabId = activeDataTab?.id;
+
+    const isListView = !activeTabId || activeTabId === `${featureId}-list`;
+    const isFormView = activeTabId && (activeTabId === `${featureId}-new` || activeTabId.startsWith(`${featureId}-edit-`));
+
+    // Extract ID for edit if applicable
+    const editId = activeTabId?.startsWith(`${featureId}-edit-`) ? activeTabId.replace(`${featureId}-edit-`, '') : null;
+    const editingCustomer = editId ? customers.find(c => c.id === editId) : null;
+
+    const fetchCustomers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const params: any = { limit: 100 };
+            if (searchQuery) params.search = searchQuery;
+            if (statusFilter !== 'all') params.status = statusFilter;
+
+            const response = await api.get('/customers', params);
+            const data = response.data.data || response.data || [];
+            if (Array.isArray(data)) {
+                setCustomers(data);
+            } else {
+                setCustomers([]);
+            }
+        } catch (error) {
+            console.error('Failed to fetch customers:', error);
+            setCustomers([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [searchQuery, statusFilter]);
+
+    useEffect(() => {
+        if (isListView) {
+            fetchCustomers();
+        }
+    }, [fetchCustomers, isListView]);
+
+    const handleNewClick = () => {
+        openDataTab(featureId, {
+            id: `${featureId}-new`,
+            title: 'Pelanggan Baru',
+            href: featureId
+        });
+    };
+
+    const handleRowClick = (customer: any) => {
+        openDataTab(featureId, {
+            id: `${featureId}-edit-${customer.id}`,
+            title: `${customer.name}`,
+            href: featureId
+        });
+    };
+
+    const handleCancelForm = () => {
+        if (activeTabId) {
+            closeDataTab(featureId, activeTabId);
+        }
+        fetchCustomers();
+    };
+
+    const handleSaveSuccess = () => {
+        if (activeTabId) {
+            closeDataTab(featureId, activeTabId);
+        }
+        fetchCustomers();
+    };
+
+    const handleDeleteSuccess = () => {
+        if (activeTabId) {
+            closeDataTab(featureId, activeTabId);
+        }
+        fetchCustomers();
+    };
+
+    return (
+        <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-surface-200 overflow-hidden">
+            {isListView && (
+                <ListView
+                    customers={customers}
+                    loading={loading}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    onRefresh={fetchCustomers}
+                    onNewClick={handleNewClick}
+                    onRowClick={handleRowClick}
+                />
+            )}
+
+            {isFormView && (
+                <CustomerForm
+                    key={activeTabId}
+                    tabId={activeTabId!}
+                    featureId={featureId}
+                    initialData={editingCustomer}
+                    savedData={activeDataTab?.data}
+                    updateDataTabData={updateDataTabData}
+                    markDataTabDirty={markDataTabDirty}
+                    onCancel={handleCancelForm}
+                    onSuccess={handleSaveSuccess}
+                    onDeleteSuccess={handleDeleteSuccess}
+                />
+            )}
+        </div>
+    );
 }
-
 
 interface ListViewProps {
     customers: any[];

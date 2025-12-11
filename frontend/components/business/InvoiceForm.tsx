@@ -4,12 +4,45 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FileText, Package, List, AlignLeft, Search, Calendar, User, Hash,
-  Settings, ChevronRight, Calculator, AlertCircle, DollarSign, History, Trash2
+  Settings, ChevronRight, Calculator, AlertCircle, DollarSign, History, Trash2, Plus, Save,
+  Printer, Paperclip
 } from 'lucide-react';
 import { Button, useToast } from '@/components/ui';
 import api from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
 import { confirmAction } from '@/lib/swal';
+import { createPortal } from 'react-dom';
+
+function Tooltip({ children, text }: { children: React.ReactNode, text: string }) {
+  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const handleMouseEnter = (e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setPos({
+      top: rect.top - 8,
+      left: rect.left + rect.width / 2
+    });
+    setShow(true);
+  };
+
+  return (
+    <>
+      <div onMouseEnter={handleMouseEnter} onMouseLeave={() => setShow(false)} className="flex">
+        {children}
+      </div>
+      {show && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed px-2 py-1 text-xs text-white bg-gray-800 rounded pointer-events-none z-[9999] -translate-x-1/2 -translate-y-full whitespace-nowrap shadow-sm"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          {text}
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
 import InvoiceItemsView from './invoice/InvoiceItemsView';
 import InvoiceInfoView from './invoice/InvoiceInfoView';
 import DatePicker from '@/components/ui/DatePicker';
@@ -139,7 +172,9 @@ export default function InvoiceForm({
   }, [lines]);
 
   // Calculations State
-  const [otherCosts, setOtherCosts] = useState<CostItem[]>([]);
+  const [otherCosts, setOtherCosts] = useState<CostItem[]>(
+    (initialData as any).costs || []
+  );
   const [globalDiscount, setGlobalDiscount] = useState<{ value: number, type: 'PERCENT' | 'AMOUNT' }>({ value: 0, type: 'PERCENT' });
   const [totals, setTotals] = useState({
     subtotal: 0,
@@ -472,67 +507,6 @@ export default function InvoiceForm({
     }
   };
 
-  // Draft Handler (Create Only)
-  const handleSaveDraft = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      const selectedCustomer = customers.find(c => c.code === formData.vendorCode);
-      // Calculate Global Discount Distribution for Draft as well?
-      // User requirement implies "pelaporan" (reporting), so yes.
-      // Copy paste logic or reuse?
-      // Since it's inline, I'll duplicate for safety or refactor later.
-      const globalDisc = totals.globalDiscountAmount;
-      const totalLiableAmount = lines.reduce((sum, line) => sum + line.lineAmount, 0);
-
-      const distributedLines = lines.map(line => {
-        let share = 0;
-        if (totalLiableAmount > 0 && globalDisc > 0) {
-          share = (line.lineAmount / totalLiableAmount) * globalDisc;
-        }
-        const newAmount = line.lineAmount - share;
-        const baseAmount = line.unitPrice * line.quantity;
-        const totalDiscountAmount = (baseAmount - newAmount);
-        let newDiscountPercent = 0;
-        if (baseAmount > 0) {
-          newDiscountPercent = (totalDiscountAmount / baseAmount) * 100;
-        }
-        return {
-          itemId: line.itemId,
-          description: line.description,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          discountPercent: newDiscountPercent,
-          amount: newAmount,
-          warehouseId: line.warehouseId
-        };
-      });
-
-      const payload = {
-        companyId: 'default-company',
-        fakturNumber: isManualFaktur ? formData.fakturNumber : undefined, // Respect toggle for drafts too
-        fakturDate: formData.fakturDate,
-        dueDate: formData.dueDate || null,
-        customerId: selectedCustomer?.id || undefined,
-        salespersonId: formData.salespersonId || undefined,
-        status: 'DRAFT',
-        currency: formData.currency || 'IDR',
-        subtotal: totals.subtotal,
-        discountPercent: globalDiscount.type === 'PERCENT' ? globalDiscount.value : 0,
-        discountAmount: totals.globalDiscountAmount, // Saving the calculated amount
-        totalAmount: totals.grandTotal,
-        balanceDue: totals.grandTotal,
-        lines: distributedLines
-      };
-      await api.post('/fakturs', payload);
-      addToast({ type: 'success', title: 'Draf Tersimpan', message: 'Faktur draf berhasil disimpan.' });
-      router.push('/dashboard/sales/faktur');
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <div className="flex h-full bg-[#f0f2f5] overflow-hidden font-sans">
@@ -721,38 +695,44 @@ export default function InvoiceForm({
 
             {/* Discount */}
             <div className="px-4 py-2 flex flex-col min-w-[160px]">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-semibold text-warmgray-500">Diskon</span>
-                <button
-                  type="button"
-                  onClick={() => setGlobalDiscount(prev => ({ ...prev, type: prev.type === 'PERCENT' ? 'AMOUNT' : 'PERCENT', value: 0 }))}
-                  className={cn(
-                    "text-[10px] px-1 rounded border transition-colors",
-                    globalDiscount.type === 'PERCENT'
-                      ? "bg-blue-50 text-blue-600 border-blue-100 font-bold"
-                      : "bg-warmgray-50 text-warmgray-400 border-warmgray-200"
-                  )}
-                >
-                  %
-                </button>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-warmgray-500">Diskon</span>
+                  <button
+                    type="button"
+                    onClick={() => setGlobalDiscount(prev => ({ ...prev, type: prev.type === 'PERCENT' ? 'AMOUNT' : 'PERCENT', value: 0 }))}
+                    className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded border transition-colors font-medium flex items-center justify-center",
+                      globalDiscount.type === 'PERCENT'
+                        ? "bg-blue-50 text-blue-600 border-blue-200"
+                        : "bg-warmgray-100 text-warmgray-500 border-warmgray-200"
+                    )}
+                    title={globalDiscount.type === 'PERCENT' ? "Ganti ke Nominal (Rp)" : "Ganti ke Persen (%)"}
+                  >
+                    {globalDiscount.type === 'PERCENT' ? '%' : 'Rp'}
+                  </button>
+                </div>
+                {totals.itemDiscountTotal > 0 && (
+                  <span className="text-[10px] text-warmgray-400">
+                    Item: {formatCurrency(totals.itemDiscountTotal)}
+                  </span>
+                )}
               </div>
-              <div className="flex items-center border border-warmgray-300 rounded overflow-hidden h-[26px] hover:border-primary-400 transition-colors">
-                <span className="bg-warmgray-50 px-2 text-xs text-warmgray-500 border-r border-warmgray-300 h-full flex items-center">
-                  {globalDiscount.type === 'PERCENT' ? '%' : 'Rp'}
-                </span>
+              <div className="flex items-center border border-warmgray-300 rounded overflow-hidden h-[32px] hover:border-primary-400 transition-colors bg-white px-2">
+                {globalDiscount.type === 'AMOUNT' && (
+                  <span className="text-sm text-warmgray-500 font-medium mr-1">Rp</span>
+                )}
                 <input
                   type="number"
-                  value={globalDiscount.value}
+                  value={globalDiscount.value === 0 ? '' : globalDiscount.value}
                   onChange={(e) => setGlobalDiscount(prev => ({ ...prev, value: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-2 text-xs text-right outline-none bg-white h-full font-medium text-warmgray-900"
+                  className="w-full text-sm text-right border-none p-0 outline-none focus:outline-none bg-transparent h-full font-medium text-warmgray-900 placeholder:text-warmgray-300 focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   placeholder="0"
                 />
+                {globalDiscount.type === 'PERCENT' && (
+                  <span className="text-sm text-warmgray-500 font-medium ml-1">%</span>
+                )}
               </div>
-              {totals.itemDiscountTotal > 0 && (
-                <span className="text-[10px] text-warmgray-400 text-right mt-0.5">
-                  (Item: {formatCurrency(totals.itemDiscountTotal)})
-                </span>
-              )}
             </div>
 
             {/* Total Biaya (Costs) */}
@@ -770,48 +750,62 @@ export default function InvoiceForm({
           </div>
 
           {/* Buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="h-6 w-px bg-warmgray-300 mx-2"></div>
-            <button
-              onClick={() => router.back()}
-              className="text-warmgray-600 hover:text-warmgray-900 font-medium text-sm transition-colors"
-              type="button"
-            >
-              batalkan
-            </button>
 
-            {initialData.id ? (
-              <Button
-                variant="outline"
-                className="bg-white hover:bg-red-50 text-red-600 border-red-200 hover:border-red-300 font-semibold"
-                onClick={handleDelete}
-                isLoading={isLoading}
-                type="button"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Hapus
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                className="bg-warmgray-200 hover:bg-warmgray-300 text-warmgray-800 border-none font-semibold"
-                onClick={(e) => handleSaveDraft(e)}
-                isLoading={isLoading}
-                type="button"
-              >
-                Simpan Draf
-              </Button>
+            {initialData.id && (
+              <Tooltip text="Hapus Faktur">
+                <button
+                  className="p-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleDelete}
+                  disabled={isLoading}
+                  type="button"
+                >
+                  <Trash2 className="h-6 w-6" />
+                </button>
+              </Tooltip>
             )}
+            <Tooltip text="Simpan Transaksi">
+              <button
+                className="p-3 bg-[#d95d39] hover:bg-[#c44e2b] text-white border border-transparent rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={(e) => handleSubmit(e, 'UNPAID')}
+                disabled={isLoading}
+                type="button"
+              >
+                <Save className="h-6 w-6" />
+              </button>
+            </Tooltip>
 
-            <Button
-              variant="primary"
-              className="bg-[#d95d39] hover:bg-[#c44e2b] text-white border-none font-semibold shadow-md"
-              onClick={(e) => handleSubmit(e, 'UNPAID')}
-              isLoading={isLoading}
-              type="button"
-            >
-              Simpan Transaksi
-            </Button>
+            <Tooltip text="Cetak">
+              <button
+                className="p-3 text-[#d95d39] bg-[#fff5f2] hover:bg-[#ffeadd] rounded-lg transition-colors border border-[#ffd6c9] shadow-sm"
+                type="button"
+                onClick={() => { }}
+              >
+                <Printer className="h-6 w-6" />
+              </button>
+            </Tooltip>
+
+            <Tooltip text="Lampiran">
+              <button
+                className="p-3 text-[#d95d39] bg-[#fff5f2] hover:bg-[#ffeadd] rounded-lg transition-colors border border-[#ffd6c9] shadow-sm"
+                type="button"
+                onClick={() => { }}
+              >
+                <Paperclip className="h-6 w-6" />
+              </button>
+            </Tooltip>
+
+            <Tooltip text="Pengaturan">
+              <button
+                className="p-3 text-[#d95d39] bg-[#fff5f2] hover:bg-[#ffeadd] rounded-lg transition-colors border border-[#ffd6c9] shadow-sm"
+                type="button"
+                onClick={() => { }}
+              >
+                <Settings className="h-6 w-6" />
+              </button>
+            </Tooltip>
+
           </div>
         </div>
       </div>

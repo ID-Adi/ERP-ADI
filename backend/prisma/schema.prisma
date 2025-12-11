@@ -37,6 +37,7 @@ model Company {
   journalEntries JournalEntry[]
   salespersons   Salesperson[]
   employees      Employee[]
+  printTemplates PrintTemplate[]
 }
 
 model User {
@@ -51,6 +52,9 @@ model User {
   updatedAt DateTime @updatedAt
 
   company   Company  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([isActive, companyId])
 }
 
 enum UserRole {
@@ -145,6 +149,9 @@ model Customer {
 
   @@map("customer") // Explicit table name
   @@unique([companyId, code])
+  @@index([companyId])
+  @@index([paymentTermId])
+  @@index([isActive, companyId])
 }
 
 model Item {
@@ -182,6 +189,8 @@ model Item {
   @@unique([companyId, code])
   @@index([categoryId])
   @@index([barcode])
+  @@index([companyId])
+  @@index([isActive, companyId])
 }
 
 // --- INVENTORY SUPPORTING TABLES ---
@@ -207,6 +216,7 @@ model ItemCategory {
 
   @@unique([companyId, code])
   @@index([parentId])
+  @@index([companyId])
 }
 
 model Unit {
@@ -238,6 +248,7 @@ model PaymentTerm {
   fakturs     Faktur[]
 
   @@unique([companyId, code])
+  @@index([companyId])
 }
 
 model ItemPricing {
@@ -286,6 +297,7 @@ model Salesperson {
   fakturs Faktur[]
 
   @@unique([companyId, code])
+  @@index([companyId])
 }
 
 model Employee {
@@ -319,6 +331,7 @@ model Employee {
   salesperson Salesperson?
 
   @@index([companyId])
+  @@index([isActive, companyId])
 }
 
 model Warehouse {
@@ -337,6 +350,8 @@ model Warehouse {
   fakturLines FakturLine[]
 
   @@unique([companyId, code])
+  @@index([companyId])
+  @@index([isActive, companyId])
 }
 
 model ItemStock {
@@ -357,6 +372,9 @@ model ItemStock {
 
   @@unique([itemId, warehouseId])
   @@index([availableStock])
+  @@index([itemId])
+  @@index([warehouseId])
+  @@index([warehouseId, availableStock])
 }
 
 model ItemSupplier {
@@ -379,6 +397,8 @@ model ItemSupplier {
 
   @@unique([itemId, supplierId])
   @@index([isPrimary])
+  @@index([itemId])
+  @@index([itemId, isPrimary])
 }
 
 model ItemTax {
@@ -456,6 +476,11 @@ model SalesOrder {
   fakturs      Faktur[] // Relation to Fakturs
 
   @@unique([companyId, orderNumber])
+  @@index([companyId])
+  @@index([customerId])
+  @@index([status])
+  @@index([orderDate])
+  @@index([companyId, status])
 }
 
 model SalesOrderLine {
@@ -473,6 +498,9 @@ model SalesOrderLine {
 
   salesOrder   SalesOrder  @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   item         Item?       @relation(fields: [itemId], references: [id])
+
+  @@index([salesOrderId])
+  @@index([itemId])
 }
 
 model Faktur {
@@ -518,9 +546,22 @@ model Faktur {
   company       Company       @relation(fields: [companyId], references: [id])
   salesOrder    SalesOrder?   @relation(fields: [salesOrderId], references: [id])
   lines         FakturLine[]
+  costs         FakturCost[]
   receiptLines  SalesReceiptLine[]
 
   @@unique([companyId, fakturNumber])
+  @@index([companyId])
+  @@index([customerId])
+  @@index([salespersonId])
+  @@index([status])
+  @@index([fakturDate])
+  @@index([dueDate])
+  @@index([status, dueDate])
+  @@index([customerId, status])
+  @@index([fakturDate, status])
+  @@index([salespersonId, fakturDate])
+  @@index([salesOrderId])
+  @@index([paymentTermId])
 }
 
 model FakturLine {
@@ -539,6 +580,27 @@ model FakturLine {
 
   faktur        Faktur        @relation(fields: [fakturId], references: [id], onDelete: Cascade)
   item          Item?         @relation(fields: [itemId], references: [id])
+
+  @@index([fakturId])
+  @@index([itemId])
+  @@index([warehouseId])
+}
+
+model FakturCost {
+  id          String   @id @default(uuid())
+  fakturId    String
+  accountId   String
+  amount      Decimal  @db.Decimal(15, 2)
+  notes       String?
+
+  faktur      Faktur   @relation(fields: [fakturId], references: [id], onDelete: Cascade)
+  account     Account  @relation("FakturCostAccount", fields: [accountId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([fakturId])
+  @@index([accountId])
 }
 
 enum OrderStatus {
@@ -590,6 +652,13 @@ model SalesReceipt {
   lines           SalesReceiptLine[]
 
   @@unique([companyId, receiptNumber])
+  @@index([companyId])
+  @@index([customerId])
+  @@index([receiptDate])
+  @@index([status])
+  @@index([bankAccountId])
+  @@index([companyId, status])
+  @@index([customerId, receiptDate])
 }
 
 model SalesReceiptLine {
@@ -600,8 +669,11 @@ model SalesReceiptLine {
   faktur          Faktur?       @relation(fields: [fakturId], references: [id])
   
   amount          Decimal       @db.Decimal(15, 2) // Alokasi ke faktur ini
-  
+
   salesReceipt    SalesReceipt  @relation(fields: [salesReceiptId], references: [id], onDelete: Cascade)
+
+  @@index([salesReceiptId])
+  @@index([fakturId])
 }
 
 enum ReceiptStatus {
@@ -641,6 +713,7 @@ model Account {
   itemTaxes       ItemTax[]
   hppCategories   ItemCategory[] @relation("CategoryHPP")
   salesReceipts   SalesReceipt[]
+  fakturCosts     FakturCost[] @relation("FakturCostAccount")
   
   // Snapshot Saldo
   balances    AccountBalance[]
@@ -661,6 +734,11 @@ model Account {
 
   @@unique([companyId, code])
   @@index([companyId, type])
+  @@index([companyId])
+  @@index([parentId])
+  @@index([type])
+  @@index([isActive, companyId])
+  @@index([isHeader, companyId])
 }
 
 model JournalEntry {
@@ -680,11 +758,15 @@ model JournalEntry {
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  
+
   company       Company  @relation(fields: [companyId], references: [id])
 
   @@unique([companyId, transactionNo])
   @@index([transactionDate])
+  @@index([companyId])
+  @@index([transactionDate, companyId])
+  @@index([sourceType])
+  @@index([sourceId])
 }
 
 model JournalLine {
@@ -701,6 +783,8 @@ model JournalLine {
   account       Account      @relation(fields: [accountId], references: [id])
 
   @@index([accountId, journalId])
+  @@index([journalId])
+  @@index([accountId])
 }
 
 model AccountBalance {
@@ -716,6 +800,8 @@ model AccountBalance {
   account     Account @relation(fields: [accountId], references: [id])
 
   @@unique([accountId, period])
+  @@index([accountId])
+  @@index([period])
 }
 
 enum AccountType {
@@ -735,4 +821,55 @@ enum AccountType {
   EXPENSE                   // Beban
   OTHER_EXPENSE             // Beban Lainnya
   OTHER_INCOME              // Pendapatan Lainnya
+}
+
+// --- SETTINGS & TEMPLATES ---
+
+model PrintTemplate {
+  id        String            @id @default(uuid())
+  companyId String
+  name      String
+  type      PrintTemplateType
+  content   String?           @db.Text // HTML/JSON content
+  isDefault Boolean           @default(false)
+  isActive  Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  company   Company           @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([type])
+}
+
+enum PrintTemplateType {
+  ANGGARAN
+  FAKTUR_PEMBELIAN
+  FAKTUR_PENJUALAN
+  JURNAL_UMUM
+  PEKERJAAN_PESANAN
+  PEMBAYARAN
+  PEMBAYARAN_PEMBELIAN
+  PEMINDAHAN_BARANG
+  PENAMBAHAN_BAHAN_BAKU
+  PENAWARAN_PENJUALAN
+  PENCATATAN_BEBAN
+  PENERIMAAN
+  PENERIMAAN_BARANG
+  PENERIMAAN_PENJUALAN
+  PENGIRIMAN_PESANAN
+  PENYELESAIAN_PESANAN
+  PENYESUAIAN_PERSEDIAAN
+  PERINTAH_STOK_OPNAME
+  PERMINTAAN_BARANG
+  PESANAN_PEMBELIAN
+  PESANAN_PENJUALAN
+  PINDAH_ASET
+  RETUR_PEMBELIAN
+  RETUR_PENJUALAN
+  SLIP_GAJI
+  TARGET_PENJUALAN
+  TRANSFER_BANK
+  UANG_MUKA_PEMBELIAN
+  UANG_MUKA_PENJUALAN
 }
