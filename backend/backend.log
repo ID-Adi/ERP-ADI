@@ -1,42 +1,36 @@
 
 > erp-adi-backend@0.1.0 dev
-> ts-node-dev --respawn --transpile-only src/index.ts
+> ts-node-dev -r tsconfig-paths/register --respawn --transpile-only src/index.ts
 
-[INFO] 13:34:01 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+[INFO] 15:35:40 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
 🚀 Server running on port 4000
-[0mGET /api/items?limit=50&page=1 [32m200[0m 1720.970 ms - 36015[0m
-[0mGET /api/items?limit=50&page=2 [32m200[0m 833.081 ms - 36015[0m
-[0mGET /api/items?limit=50&page=3 [32m200[0m 828.485 ms - 36015[0m
-[0mGET /api/items?limit=50&page=4 [32m200[0m 830.944 ms - 36015[0m
-[0mGET /api/items?limit=50&page=5 [32m200[0m 827.438 ms - 36015[0m
-[0mGET /api/items?limit=50&page=6 [32m200[0m 826.808 ms - 36015[0m
-[0mGET /api/items?limit=50&page=7 [32m200[0m 895.847 ms - 36009[0m
-[0mGET /api/items?limit=50&page=8 [32m200[0m 831.116 ms - 35965[0m
-[0mGET /api/items?limit=50&page=9 [32m200[0m 828.502 ms - 35325[0m
-[0mGET /api/items?limit=50&page=1 [32m200[0m 842.939 ms - 36015[0m
-[0mGET /api/items?limit=50&page=2 [32m200[0m 824.073 ms - 36015[0m
-[0mGET /api/items?limit=50&page=3 [32m200[0m 823.190 ms - 36015[0m
-[0mGET /api/items?limit=50&page=4 [32m200[0m 823.118 ms - 36015[0m
-[0mGET /api/items?limit=50&page=5 [32m200[0m 901.541 ms - 36015[0m
-[0mGET /api/items?limit=50&page=6 [32m200[0m 833.284 ms - 36015[0m
-[0mGET /api/items?limit=50&page=7 [32m200[0m 867.296 ms - 36009[0m
-[0mGET /api/items?limit=50&page=8 [32m200[0m 830.232 ms - 35965[0m
-[0mGET /api/items?limit=50&page=9 [32m200[0m 859.245 ms - 35325[0m
-[INFO] 13:35:27 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
-🚀 Server running on port 4000
-SERVING HARDCODED RESPONSE
-[0mGET /api/items?limit=50&page=1 [32m200[0m 1.012 ms - 223[0m
-SERVING HARDCODED RESPONSE
-[0mGET /api/items?limit=50&page=1 [32m200[0m 3.081 ms - 223[0m
-SERVING HARDCODED RESPONSE
-[0mGET /api/items?limit=50&page=1 [32m200[0m 3.269 ms - 223[0m
-[0mGET /api/customers [32m200[0m 918.420 ms - 3159[0m
-[0mGET /api/customers [32m200[0m 1210.062 ms - 3159[0m
-[INFO] 13:39:42 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
-🚀 Server running on port 4000
-[INFO] 13:39:51 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
-🚀 Server running on port 4000
-[INFO] 13:39:53 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
-🚀 Server running on port 4000
-[INFO] 13:40:06 Restarting: /Users/adi/Documents/Development/ERP-ADI/backend/src/api/controllers/item.controller.ts has been modified
-🚀 Server running on port 4000
+prisma:error
+Invalid `prisma.user.findUnique()` invocation in
+/app/backend/src/api/controllers/auth.controller.ts:28:40
+
+  25 try {
+  26     const { email, password } = loginSchema.parse(req.body);
+  27
+→ 28     const user = await prisma.user.findUnique(
+Can't reach database server at `localhost:5432`
+
+Please make sure your database server is running at `localhost:5432`.
+Login error: PrismaClientInitializationError:
+Invalid `prisma.user.findUnique()` invocation in
+/app/backend/src/api/controllers/auth.controller.ts:28:40
+
+  25 try {
+  26     const { email, password } = loginSchema.parse(req.body);
+  27
+→ 28     const user = await prisma.user.findUnique(
+Can't reach database server at `localhost:5432`
+
+Please make sure your database server is running at `localhost:5432`.
+    at $n.handleRequestError (/app/backend/node_modules/@prisma/client/runtime/library.js:121:7615)
+    at $n.handleAndLogRequestError (/app/backend/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/app/backend/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at l (/app/backend/node_modules/@prisma/client/runtime/library.js:130:9633) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+[0mPOST /api/auth/login [31m500[0m 85.592 ms - 35[0m

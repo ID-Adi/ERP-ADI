@@ -1,0 +1,22 @@
+
+> erp-adi-frontend@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.33
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.3s
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 1002ms (72 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 8.6s (774 modules)
+ ✓ Compiled in 1133ms (345 modules)
+ GET /login 200 in 9839ms
+ GET /login 200 in 42ms
+ GET /login 200 in 45ms
+(node:2730) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ GET /login 200 in 34ms
+[?25h
