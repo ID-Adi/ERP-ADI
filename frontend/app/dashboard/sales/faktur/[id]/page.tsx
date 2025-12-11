@@ -38,9 +38,10 @@ export default function EditInvoicePage() {
         id: line.id,
         itemId: line.itemId,
         itemCode: line.item?.code || '',
-        description: line.description,
+        description: line.itemName || line.item?.name || '', // Map itemName from DB to description (Frontend Item Name)
+        notes: line.description, // Map description from DB to notes (Frontend User Note)
         quantity: Number(line.quantity),
-        unit: line.item?.uom || 'PCS',
+        unit: line.unit || line.item?.uom || 'PCS',
         unitPrice: Number(line.unitPrice),
         discountPercent: Number(line.discountPercent || 0),
         discountAmount: Number(line.discountAmount || 0),
@@ -51,8 +52,8 @@ export default function EditInvoicePage() {
         // Map warehouse and salesperson data
         warehouseId: line.warehouseId || '',
         warehouseName: line.warehouse?.name || '-',
-        salespersonId: apiData.salespersonId || '', // Use invoice-level salesperson for lines
-        salespersonName: apiData.salesperson?.name || '-',
+        salespersonId: line.salespersonId || apiData.salespersonId || '', // Use line salesperson if available, else invoice level
+        salespersonName: line.salesperson?.name || apiData.salesperson?.name || '-',
       })) || [],
       costs: apiData.costs?.map((cost: any) => ({
         id: cost.id,

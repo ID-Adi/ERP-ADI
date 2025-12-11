@@ -384,13 +384,15 @@ export default function InvoiceForm({
       return {
         itemId: line.itemId,
         description: line.description,
+        notes: line.notes,
         unit: line.unit,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discountPercent: newDiscountPercent,
         discountAmount: totalDiscountAmount,
         amount: finalAmount,
-        warehouseId: line.warehouseId
+        warehouseId: line.warehouseId,
+        salespersonId: line.salespersonId
       };
     });
   }, [lines, totals.globalDiscountAmount]);
