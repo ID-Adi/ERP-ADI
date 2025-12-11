@@ -2,6 +2,7 @@
 import { PrismaClient, AccountType } from '@prisma/client';
 import * as xlsx from 'xlsx';
 import * as path from 'path';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -42,6 +43,28 @@ async function main() {
         });
     }
     const companyId = company.id;
+
+    // 1.5 Ensure Admin User Exists
+    const userEmail = 'admin@example.com';
+    const existingUser = await prisma.user.findUnique({ where: { email: userEmail } });
+
+    if (!existingUser) {
+        console.log('Creating admin user...');
+        const hashedPassword = await bcrypt.hash('password123', 10);
+        await prisma.user.create({
+            data: {
+                companyId,
+                email: userEmail,
+                name: 'Admin User',
+                password: hashedPassword,
+                role: 'ADMIN',
+                isActive: true,
+            }
+        });
+        console.log(`User created: ${userEmail} / password123`);
+    } else {
+        console.log(`User ${userEmail} already exists.`);
+    }
 
     // 2. Read Excel File
     const workbook = xlsx.readFile(FILE_PATH);

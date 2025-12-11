@@ -128,6 +128,7 @@ export default function InvoiceForm({
     shippingDate: (initialData as any).shippingDate || new Date().toISOString().split('T')[0],
     dueDate: initialData.dueDate || new Date().toISOString().split('T')[0], // Default to Now
     salespersonId: initialData.salespersonId || '',
+    billingAddress: (initialData as any).billingAddress || '',
   });
 
   const [lines, setLines] = useState<LineItem[]>(initialData.lines || []);
@@ -268,7 +269,11 @@ export default function InvoiceForm({
   const handleCustomerSelect = (code: string) => {
     const selectedCustomer = customers.find(c => c.code === code);
     setFormData(prev => {
-      const newData = { ...prev, vendorCode: code };
+      const newData = { 
+        ...prev, 
+        vendorCode: code,
+        billingAddress: selectedCustomer?.address || '' 
+      };
 
       // Auto-select payment term if available on customer
       if (selectedCustomer?.paymentTermId || selectedCustomer?.paymentTerm) {
@@ -384,13 +389,15 @@ export default function InvoiceForm({
       return {
         itemId: line.itemId,
         description: line.description,
+        notes: line.notes,
         unit: line.unit,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discountPercent: newDiscountPercent,
         discountAmount: totalDiscountAmount,
         amount: finalAmount,
-        warehouseId: line.warehouseId
+        warehouseId: line.warehouseId,
+        salespersonId: line.salespersonId
       };
     });
   }, [lines, totals.globalDiscountAmount]);
