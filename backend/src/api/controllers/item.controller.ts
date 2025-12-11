@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient, PriceType, TransactionType } from '@prisma/client';
+import { PrismaClient, PriceType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -216,13 +216,6 @@ router.get('/', async (req: Request, res: Response) => {
                             taxName: true,
                             taxRate: true
                         }
-                    },
-                    inventoryTransactions: {
-                        where: { transactionType: 'INITIAL' },
-                        orderBy: { transactionDate: 'desc' },
-                        include: {
-                            warehouse: { select: { id: true, name: true } }
-                        }
                     }
                 }
             })
@@ -282,15 +275,7 @@ router.get('/', async (req: Request, res: Response) => {
                 // Full relational data for detail view
                 pricing: item.pricing,
                 stocks: item.stocks,
-                suppliers: item.suppliers,
-                openingStocks: item.inventoryTransactions.map(t => ({
-                    date: t.transactionDate.toISOString().split('T')[0],
-                    warehouseId: t.warehouseId,
-                    quantity: Number(t.quantity),
-                    unit: t.unit,
-                    costPerUnit: Number(t.costPerUnit),
-                    totalCost: Number(t.totalCost)
-                }))
+                suppliers: item.suppliers
             };
         });
 
@@ -428,10 +413,10 @@ router.get('/:id', async (req: Request, res: Response) => {
                 accounts: true,
                 inventoryTransactions: {
                     where: { transactionType: 'INITIAL' },
-                    orderBy: { transactionDate: 'desc' },
                     include: {
-                        warehouse: { select: { id: true, name: true } }
-                    }
+                        warehouse: true
+                    },
+                    orderBy: { transactionDate: 'desc' }
                 }
             }
         });
@@ -440,7 +425,24 @@ router.get('/:id', async (req: Request, res: Response) => {
             return res.status(404).json({ error: 'Item not found' });
         }
 
-        res.json({ data: item });
+        // Map inventoryTransactions to openingStocks for frontend compatibility
+        const openingStocks = item.inventoryTransactions.map(tx => ({
+            id: tx.id,
+            warehouseId: tx.warehouseId,
+            warehouseName: tx.warehouse?.name,
+            date: tx.transactionDate.toISOString().split('T')[0],
+            quantity: Number(tx.quantity),
+            unit: tx.unit,
+            costPerUnit: Number(tx.costPerUnit),
+            totalCost: Number(tx.totalCost)
+        }));
+
+        res.json({
+            data: {
+                ...item,
+                openingStocks
+            }
+        });
 
     } catch (error) {
         console.error('Error fetching item:', error);
@@ -840,61 +842,61 @@ router.post('/', async (req: Request, res: Response) => {
                         }
                     });
 
+                    // Create Inventory Transaction for Initial Stock
+                    await tx.inventoryTransaction.create({
+                        data: {
+                            id: crypto.randomUUID(),
+                            companyId: defaultCompany.id,
+                            itemId: newItem.id,
+                            warehouseId: warehouseId,
+                            transactionDate: new Date(stock.date || new Date()),
+                            transactionType: 'INITIAL',
+                            referenceNo: 'OPENING',
+                            quantity: quantity, // Use exact quantity
+                            unit: stock.unit || 'PCS',
+                            costPerUnit: stock.costPerUnit || 0,
+                            totalCost: totalCost,
+                            notes: `Stok Awal - ${newItem.name}`,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                            createdBy: 'SYSTEM'
+                        }
+                    });
+
                     // Create Journal Entry if quantity > 0 and accounts exist
-                    if (quantity > 0) {
-                        // 1. Create Inventory Transaction (History)
-                        await tx.inventoryTransaction.create({
+                    if (quantity > 0 && equityAccount && inventoryAccountId) {
+                        const journal = await tx.journalEntry.create({
                             data: {
                                 companyId: defaultCompany.id,
-                                itemId: newItem.id,
-                                warehouseId: warehouseId,
                                 transactionDate: new Date(stock.date || new Date()),
-                                transactionType: TransactionType.INITIAL,
-                                quantity: quantity,
-                                unit: stock.unit || newItem.uom,
-                                costPerUnit: Number(stock.costPerUnit),
-                                totalCost: totalCost,
-                                notes: 'Saldo Awal Stok',
-                                createdBy: 'SYSTEM', // TODO: Get from auth user
+                                transactionNo: `JV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                                description: `Saldo Awal Stok - ${newItem.name}`,
+                                sourceType: 'INVENTORY',
+                                sourceId: newItem.id,
                             }
                         });
 
+                        // Debit Inventory
+                        await tx.journalLine.create({
+                            data: {
+                                journalId: journal.id,
+                                accountId: inventoryAccountId,
+                                description: `Saldo Awal Stok - ${newItem.name}`,
+                                debit: totalCost,
+                                credit: 0
+                            }
+                        });
 
-                        // 2. Create Journal Entry if accounts map exists
-                        if (equityAccount && inventoryAccountId) {
-                            const journal = await tx.journalEntry.create({
-                                data: {
-                                    companyId: defaultCompany.id,
-                                    transactionDate: new Date(stock.date || new Date()),
-                                    transactionNo: `JV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                                    description: `Saldo Awal Stok - ${newItem.name}`,
-                                    sourceType: 'INVENTORY',
-                                    sourceId: newItem.id,
-                                }
-                            });
-
-                            // Debit Inventory
-                            await tx.journalLine.create({
-                                data: {
-                                    journalId: journal.id,
-                                    accountId: inventoryAccountId,
-                                    description: `Saldo Awal Stok - ${newItem.name}`,
-                                    debit: totalCost,
-                                    credit: 0
-                                }
-                            });
-
-                            // Credit Equity
-                            await tx.journalLine.create({
-                                data: {
-                                    journalId: journal.id,
-                                    accountId: equityAccount.id,
-                                    description: `Saldo Awal Stok - ${newItem.name}`,
-                                    debit: 0,
-                                    credit: totalCost
-                                }
-                            });
-                        }
+                        // Credit Equity
+                        await tx.journalLine.create({
+                            data: {
+                                journalId: journal.id,
+                                accountId: equityAccount.id,
+                                description: `Saldo Awal Stok - ${newItem.name}`,
+                                debit: 0,
+                                credit: totalCost
+                            }
+                        });
                     }
                 }
             } else {
@@ -1014,7 +1016,8 @@ router.put('/:id', async (req: Request, res: Response) => {
                 pricing: true,
                 stocks: true,
                 suppliers: true,
-                taxes: true
+                taxes: true,
+                accounts: true
             }
         });
 
@@ -1122,6 +1125,138 @@ router.put('/:id', async (req: Request, res: Response) => {
 
                 if (accountData.length > 0) {
                     await tx.itemAccount.createMany({ data: accountData });
+                }
+            }
+
+            // 6. Handle Opening Stocks in Edit Mode (Append only)
+            const openingStocks = req.body.openingStocks;
+            if (Array.isArray(openingStocks) && openingStocks.length > 0) {
+                // Determine IDs for journal (re-fetch needed or pass from body? usually implied)
+                const companyId = existingItem.companyId;
+
+                // Find Equity Account
+                const equityAccount = await tx.account.findFirst({
+                    where: {
+                        companyId: companyId,
+                        name: { contains: 'Saldo Awal', mode: 'insensitive' }
+                    }
+                });
+
+                // Find Inventory Account
+                let inventoryAccountId = null;
+                if (accounts && Array.isArray(accounts)) {
+                    const invAcc = accounts.find((a: any) => a.accountType === 'INVENTORY');
+                    if (invAcc) inventoryAccountId = invAcc.accountId;
+                } else {
+                    // Try to get from existing accounts if not updated
+                    const existingInvAcc = existingItem.accounts.find(a => a.accountType === 'INVENTORY');
+                    if (existingInvAcc) inventoryAccountId = existingInvAcc.accountId;
+                }
+
+                // Deduplicate stocks by warehouse
+                const stockMap = new Map();
+                for (const stock of openingStocks) {
+                    const existing = stockMap.get(stock.warehouseId);
+                    if (existing) {
+                        existing.quantity += Number(stock.quantity);
+                        existing.totalCost += Number(stock.totalCost);
+                    } else {
+                        stockMap.set(stock.warehouseId, {
+                            ...stock,
+                            quantity: Number(stock.quantity),
+                            totalCost: Number(stock.totalCost)
+                        });
+                    }
+                }
+
+                for (const stock of Array.from(stockMap.values())) {
+                    const { warehouseId, quantity, totalCost } = stock;
+
+                    // Upsert ItemStock
+                    const existingStock = await tx.itemStock.findFirst({
+                        where: { itemId: id, warehouseId }
+                    });
+
+                    if (existingStock) {
+                        await tx.itemStock.update({
+                            where: { id: existingStock.id },
+                            data: {
+                                currentStock: { increment: quantity },
+                                availableStock: { increment: quantity },
+                                updatedAt: new Date()
+                            }
+                        });
+                    } else {
+                        await tx.itemStock.create({
+                            data: {
+                                id: crypto.randomUUID(),
+                                itemId: id,
+                                warehouseId: warehouseId,
+                                minStock: minStock || 0,
+                                maxStock: 0,
+                                currentStock: quantity,
+                                reservedStock: 0,
+                                availableStock: quantity, // Assume initial stock is available
+                                reorderPoint: minStock || 0,
+                                updatedAt: new Date()
+                            }
+                        });
+                    }
+
+                    // Create Inventory Transaction
+                    await tx.inventoryTransaction.create({
+                        data: {
+                            id: crypto.randomUUID(),
+                            companyId: companyId,
+                            itemId: id,
+                            warehouseId: warehouseId,
+                            transactionDate: new Date(stock.date || new Date()),
+                            transactionType: 'INITIAL',
+                            referenceNo: 'OPENING-EDIT',
+                            quantity: quantity,
+                            unit: stock.unit || 'PCS',
+                            costPerUnit: stock.costPerUnit || 0,
+                            totalCost: totalCost,
+                            notes: `Tambahan Stok Awal - ${name}`,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                            createdBy: 'SYSTEM'
+                        }
+                    });
+
+                    // Journal Entry
+                    if (quantity > 0 && equityAccount && inventoryAccountId) {
+                        const journal = await tx.journalEntry.create({
+                            data: {
+                                companyId: companyId,
+                                transactionDate: new Date(stock.date || new Date()),
+                                transactionNo: `JV-EDIT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                                description: `Tambahan Saldo Awal Stok - ${name}`,
+                                sourceType: 'INVENTORY',
+                                sourceId: id,
+                            }
+                        });
+
+                        await tx.journalLine.create({
+                            data: {
+                                journalId: journal.id,
+                                accountId: inventoryAccountId,
+                                description: `Tambahan Saldo Awal Stok - ${name}`,
+                                debit: totalCost,
+                                credit: 0
+                            }
+                        });
+
+                        await tx.journalLine.create({
+                            data: {
+                                journalId: journal.id,
+                                accountId: equityAccount.id,
+                                description: `Tambahan Saldo Awal Stok - ${name}`,
+                                debit: 0,
+                                credit: totalCost
+                            }
+                        });
+                    }
                 }
             }
 

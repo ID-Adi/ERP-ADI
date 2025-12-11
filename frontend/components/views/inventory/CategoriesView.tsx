@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { confirmAction, showSuccess, showError } from '@/lib/swal';
 import { useTabContext } from '@/contexts/TabContext';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function CategoriesView() {
     const {
@@ -30,7 +31,8 @@ export default function CategoriesView() {
     // Data State
     const [categories, setCategories] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchInput, setSearchInput] = useState('');
+    const searchQuery = useDebounce(searchInput, 500);
 
     // Derived state from TabContext
     const activeDataTab = getActiveDataTab();
@@ -117,8 +119,8 @@ export default function CategoriesView() {
                 <ListView
                     categories={categories}
                     loading={loading}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
+                    searchInput={searchInput}
+                    onSearchChange={setSearchInput}
                     onRefresh={fetchCategories}
                     onNewClick={handleNewClick}
                     onRowClick={handleRowClick}
@@ -148,7 +150,7 @@ export default function CategoriesView() {
 function ListView({
     categories,
     loading,
-    searchQuery,
+    searchInput,
     onSearchChange,
     onRefresh,
     onNewClick,
@@ -180,7 +182,7 @@ function ListView({
                         <span className="px-3 py-1.5 text-sm text-warmgray-500 bg-white">Cari...</span>
                         <input
                             type="text"
-                            value={searchQuery}
+                            value={searchInput}
                             onChange={(e) => onSearchChange(e.target.value)}
                             className="w-48 px-2 py-1.5 text-sm bg-white border-l border-surface-200 focus:outline-none focus:ring-0 placeholder:text-warmgray-400"
                         />

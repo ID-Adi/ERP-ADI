@@ -1,5 +1,6 @@
 
 import { PrismaClient, FakturStatus, Prisma } from '@prisma/client';
+import { JournalService } from '../accounting/journal.service';
 
 const prisma = new PrismaClient();
 
@@ -7,28 +8,26 @@ export class FakturService {
 
     async generateFakturNumber(companyId: string, tx?: Prisma.TransactionClient): Promise<string> {
         const db = tx || prisma;
+
+        // Format: PKY-YYYYMMDD-{timestamp_seconds}-{random_3digit}
+        // Example: PKY-20241211-1702345678-847
+        const timestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // 000-999
+
         const now = new Date();
+        const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
 
-        // Format: PKY-YYYYMMDDHHmmssSSS (milliseconds added for uniqueness)
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-        const millis = String(now.getMilliseconds()).padStart(3, '0');
+        const candidate = `PKY-${dateStr}-${timestamp}-${random}`;
 
-        let candidate = `PKY-${year}${month}${day}${hours}${minutes}${seconds}${millis}`;
+        // Single collision check (probability ~0.1% with 1000 combinations/second)
+        const exists = await db.faktur.count({
+            where: { companyId, fakturNumber: candidate }
+        });
 
-        // Collision safety (should be extremely rare with milliseconds)
-        let counter = 0;
-        while (true) {
-            const exists = await db.faktur.count({
-                where: { companyId, fakturNumber: candidate }
-            });
-            if (exists === 0) break;
-            counter++;
-            candidate = `PKY-${year}${month}${day}${hours}${minutes}${seconds}${millis}-${counter}`;
+        // Retry once with new random if collision (very rare)
+        if (exists > 0) {
+            const newRandom = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+            return `PKY-${dateStr}-${timestamp}-${newRandom}`;
         }
 
         return candidate;
@@ -184,249 +183,21 @@ export class FakturService {
         }
     }
 
-    // Helper: Create Journal Entries - OPTIMIZED with batch fetching
+    // Helper: Create Journal Entries - Delegated to JournalService
     private async createJournalEntries(tx: Prisma.TransactionClient, faktur: any, lines: any[], companyId: string) {
-        // 1. Sales & AR Journal
-        // DEBIT: AR (Piutang)
-        // CREDIT: Sales (Penjualan)
-        // CREDIT: Tax Payable (Utang Pajak)
+        const journalService = new JournalService();
 
-        const customer = await tx.customer.findUnique({ where: { id: faktur.customerId } });
-        if (!customer) throw new Error("Customer not found");
+        // 1. Create Sales Journal
+        await journalService.createSalesJournal(tx, faktur, lines);
 
-        const arAccount = customer.receivableAccountId;
-        if (!arAccount) throw new Error(`Customer ${customer.name} missing Receivable Account setting.`);
-
-        // Filter lines with itemId
-        const validLines = lines.filter(l => l.itemId);
-        const itemIds = [...new Set(validLines.map(l => l.itemId))];
-
-        // Batch fetch all items with their accounts and categories in one query
-        const items = await tx.item.findMany({
-            where: { id: { in: itemIds } },
-            include: {
-                accounts: true,
-                category: { include: { hppAccount: true } }
-            }
-        });
-        const itemMap = new Map(items.map(i => [i.id, i]));
-
-        // Batch fetch all item pricing (PURCHASE type) at once
-        const itemPricings = await tx.itemPricing.findMany({
-            where: {
-                itemId: { in: itemIds },
-                priceType: 'PURCHASE'
-            }
-        });
-        const pricingMap = new Map(itemPricings.map(p => [p.itemId, p]));
-
-        // Batch fetch all primary suppliers at once
-        const suppliers = await tx.itemSupplier.findMany({
-            where: {
-                itemId: { in: itemIds },
-                isPrimary: true
-            }
-        });
-        const supplierMap = new Map(suppliers.map(s => [s.itemId, s]));
-
-        const journalLines = [];
-
-        // Debit AR
-        journalLines.push({
-            accountId: arAccount,
-            description: `Piutang Usaha - ${faktur.fakturNumber}`,
-            debit: Number(faktur.totalAmount),
-            credit: 0
-        });
-
-        // Group by Sales Account
-        const salesByAccount: Record<string, number> = {};
-        const cogsByItem: Array<{ itemId: string, qty: number, cost: number }> = [];
-
-        for (const line of validLines) {
-            const item = itemMap.get(line.itemId);
-            if (!item) continue;
-
-            // Find Sales Account: Item Specific -> Customer Default
-            let salesAccountId = item.accounts.find(a => a.accountType === 'SALES')?.accountId;
-            if (!salesAccountId) salesAccountId = customer.salesAccountId || undefined;
-
-            if (!salesAccountId) {
-                throw new Error(`No Sales Account found for item ${item.name} or Customer ${customer.name}`);
-            }
-
-            const lineApparentTotal = Number(line.amount);
-            salesByAccount[salesAccountId] = (salesByAccount[salesAccountId] || 0) + lineApparentTotal;
-
-            // Get cost from pre-fetched data
-            const pricing = pricingMap.get(item.id);
-            const supplier = supplierMap.get(item.id);
-
-            let cost = 0;
-            if (pricing) {
-                cost = Number(pricing.price);
-            } else if (supplier?.purchasePrice) {
-                cost = Number(supplier.purchasePrice);
-            }
-
-            if (cost > 0 && item.isStockItem) {
-                cogsByItem.push({
-                    itemId: item.id,
-                    qty: Number(line.quantity),
-                    cost: cost
-                });
-            }
-        }
-
-        // Add Sales Credit Lines
-        for (const [accId, amount] of Object.entries(salesByAccount)) {
-            journalLines.push({
-                accountId: accId,
-                description: `Penjualan - ${faktur.fakturNumber}`,
-                debit: 0,
-                credit: amount
-            });
-        }
-
-        // Credit Tax (If any)
-        if (Number(faktur.taxAmount) > 0) {
-            const taxAccount = await tx.account.findFirst({
-                where: {
-                    companyId,
-                    OR: [
-                        { name: { contains: 'Pajak', mode: 'insensitive' } },
-                        { name: { contains: 'PPN', mode: 'insensitive' } }
-                    ],
-                    type: 'OTHER_CURRENT_LIABILITIES',
-                    isActive: true
-                }
-            });
-
-            if (!taxAccount) {
-                throw new Error(
-                    `Tax account not found. Please create an account with 'Pajak' or 'PPN' ` +
-                    `in the name under type 'OTHER_CURRENT_LIABILITIES' before creating invoices with tax.`
-                );
-            }
-
-            journalLines.push({
-                accountId: taxAccount.id,
-                description: `Utang Pajak - ${faktur.fakturNumber}`,
-                debit: 0,
-                credit: Number(faktur.taxAmount)
-            });
-        }
-
-        // Create Sales Journal
-        await tx.journalEntry.create({
-            data: {
-                companyId,
-                transactionDate: faktur.fakturDate,
-                transactionNo: faktur.fakturNumber,
-                reference: faktur.fakturNumber,
-                sourceType: 'SALES_INVOICE',
-                sourceId: faktur.id,
-                description: `Invoice ${faktur.fakturNumber}`,
-                lines: { create: journalLines }
-            }
-        });
-
-        // 2. COGS & Inventory Journal (using pre-fetched item data)
-        const cogsLines = [];
-
-        for (const itemData of cogsByItem) {
-            const item = itemMap.get(itemData.itemId);
-            if (!item) continue;
-
-            const totalCost = itemData.qty * itemData.cost;
-            if (totalCost === 0) continue;
-
-            // Resolve Accounts (already have accounts from batch fetch)
-            let cogsAccountId = item.accounts.find(a => a.accountType === 'COGS')?.accountId;
-            if (!cogsAccountId) cogsAccountId = item.category?.hppAccountId || undefined;
-            if (!cogsAccountId) cogsAccountId = customer.cogsAccountId || undefined;
-
-            let inventoryAccountId = item.accounts.find(a => a.accountType === 'INVENTORY')?.accountId;
-
-            if (cogsAccountId && inventoryAccountId) {
-                cogsLines.push({
-                    accountId: cogsAccountId,
-                    description: `HPP - ${item.name}`,
-                    debit: totalCost,
-                    credit: 0
-                });
-                cogsLines.push({
-                    accountId: inventoryAccountId,
-                    description: `Persediaan - ${item.name}`,
-                    debit: 0,
-                    credit: totalCost
-                });
-            }
-        }
-
-        if (cogsLines.length > 0) {
-            await tx.journalEntry.create({
-                data: {
-                    companyId,
-                    transactionDate: faktur.fakturDate,
-                    transactionNo: `${faktur.fakturNumber}-COGS`,
-                    reference: faktur.fakturNumber,
-                    sourceType: 'SALES_COGS',
-                    sourceId: faktur.id,
-                    description: `HPP Invoice ${faktur.fakturNumber}`,
-                    lines: { create: cogsLines }
-                }
-            });
-        }
+        // 2. Create COGS Journal
+        await journalService.createCOGSJournal(tx, faktur, lines);
     }
 
     // Helper: Reverse (Void) Journals
     private async voidJournals(tx: Prisma.TransactionClient, fakturId: string) {
-        // Find existing journals for this source
-        const journals = await tx.journalEntry.findMany({
-            where: {
-                sourceId: fakturId,
-                OR: [{ sourceType: 'SALES_INVOICE' }, { sourceType: 'SALES_COGS' }]
-            }
-        });
-
-        for (const journal of journals) {
-            // Create Reversal
-            /*
-            await tx.journalEntry.create({
-                data: {
-                    companyId: journal.companyId,
-                    transactionDate: new Date(), // Now
-                    transactionNo: `${journal.transactionNo}-REV`,
-                    reference: journal.transactionNo,
-                    sourceType: `${journal.sourceType}_VOID`,
-                    sourceId: fakturId,
-                    description: `VOID ${journal.description}`,
-                    lines: {
-                        create: (await tx.journalLine.findMany({ where: { journalId: journal.id } })).map(line => ({
-                            accountId: line.accountId,
-                            description: `VOID ${line.description}`,
-                            debit: line.credit, // Swap
-                            credit: line.debit  // Swap
-                        }))
-                    }
-                }
-            });
-            */
-            // simpler approach: Just delete them if we are "Editing" the invoice? 
-            // Access control says we shouldn't simply delete journals in strict accounting, 
-            // but for "Draft/Unpaid" correction it might be cleaner to just rebuild them 
-            // if within same period.
-            // BUT, user asked for "System ERP", usually implies some audit trail. 
-            // However, for typical edits before closing month, delete/recreate is often used in smaller ERPs.
-            // The implementation plan said "Void old Journal".
-
-            // Let's DELETE them for now to avoid cluttering the DB with REV entries during simple edits,
-            // UNLESS the invoice was already PAID/Finalized. But the controller allows editing 'UNPAID'.
-
-            await tx.journalLine.deleteMany({ where: { journalId: journal.id } });
-            await tx.journalEntry.delete({ where: { id: journal.id } });
-        }
+        const journalService = new JournalService();
+        await journalService.voidJournal(tx, fakturId);
     }
 
 

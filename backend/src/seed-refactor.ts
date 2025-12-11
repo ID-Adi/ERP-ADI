@@ -140,6 +140,7 @@ async function main() {
                     create: [
                         {
                             description: items[1].name,
+                            itemName: items[1].name,
                             quantity: 2 * (i + 1),
                             unitPrice: 15000,
                             amount: 30000 * (i + 1),

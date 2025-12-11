@@ -20,13 +20,16 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useTabContext } from '@/contexts/TabContext';
+import { confirmAction } from '@/lib/swal';
 import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 // Updated imports to point to original location
 import ImportView from '@/app/dashboard/inventory/items/ImportView';
 import StockModal from '@/app/dashboard/inventory/items/StockModal';
+
 import { useDebounce } from '@/hooks/useDebounce';
+import { useToast } from '@/components/ui';
 
 import api from '@/lib/api';
 
@@ -465,6 +468,7 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
 
     const [subTab, setSubTab] = useState('umum');
     const [submitting, setSubmitting] = useState(false);
+    const { addToast } = useToast();
 
     // Form State - Initialize with CACHED data if available, else Initial, else Default
     // We cast cachedData to any to match expected shape
@@ -516,6 +520,9 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
         ...(cachedData as any || {})
     });
 
+    // Lifted autoCode state to handle validation correctly
+    const [autoCode, setAutoCode] = useState(!isEdit && !formData.code);
+
     const [accountList, setAccountList] = useState<any[]>([]);
 
     const handleChange = (field: string, value: any) => {
@@ -529,8 +536,13 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
     };
 
     const handleSave = async () => {
-        if (!formData.name || !formData.code) {
-            alert('Nama Barang dan Kode Barang wajib diisi');
+        // Validation: Name is required. Code is required UNLESS autoCode is true.
+        if (!formData.name || (!formData.code && !autoCode)) {
+            addToast({
+                type: 'error',
+                title: 'Data Tidak Lengkap',
+                message: 'Nama Barang dan Kode Barang wajib diisi',
+            });
             return;
         }
 
@@ -546,7 +558,11 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                     }))
                 };
                 await api.put(`/items/${initialData.id}`, payload);
-                alert('Barang berhasil diperbarui');
+                addToast({
+                    type: 'success',
+                    title: 'Berhasil',
+                    message: 'Barang berhasil diperbarui',
+                });
             } else {
                 const payload = {
                     ...formData,
@@ -556,12 +572,20 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                     }))
                 };
                 await api.post('/items', payload);
-                alert('Barang berhasil disimpan');
+                addToast({
+                    type: 'success',
+                    title: 'Berhasil',
+                    message: 'Barang berhasil disimpan',
+                });
             }
             onCancel(); // Back to list and refresh
         } catch (error: any) {
             console.error('Error saving item:', error);
-            alert(error.response?.data?.error || 'Gagal menyimpan barang');
+            addToast({
+                type: 'error',
+                title: 'Gagal Menyimpan',
+                message: error.response?.data?.error || 'Gagal menyimpan barang',
+            });
         } finally {
             setSubmitting(false);
         }
@@ -652,57 +676,6 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
 
     return (
         <div className="flex flex-col h-full bg-surface-50">
-            {/* Header / Toolbar */}
-            <div className="flex items-center justify-between px-6 py-3 bg-warmgray-800 text-white border-b border-warmgray-900 flex-none shadow-md">
-                <div className="flex items-center gap-4">
-                    <button onClick={onCancel} className="p-1 hover:bg-warmgray-700 rounded-full transition-colors text-warmgray-300">
-                        <X className="h-5 w-5" />
-                    </button>
-                    <span className="text-lg font-semibold tracking-wide">
-                        {isEdit ? 'Edit Data Barang' : 'Data Baru'}
-                    </span>
-                </div>
-                <div className="flex items-center gap-3">
-                    {isEdit && (
-                        <button
-                            onClick={async () => {
-                                if (confirm('Apakah Anda yakin ingin menghapus barang ini?')) {
-                                    setSubmitting(true);
-                                    try {
-                                        await api.delete(`/items/${initialData.id}`);
-                                        alert('Barang berhasil dihapus');
-                                        onCancel();
-                                    } catch (error: any) {
-                                        console.error('Error deleting item:', error);
-                                        alert(error.response?.data?.error || 'Gagal menghapus barang');
-                                    } finally {
-                                        setSubmitting(false);
-                                    }
-                                }
-                            }}
-                            disabled={submitting}
-                            className={cn(
-                                "flex items-center gap-2 px-4 py-2 bg-danger-600 hover:bg-danger-700 text-white rounded-md shadow-lg font-medium transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed",
-                                submitting && "opacity-75 cursor-wait"
-                            )}
-                        >
-                            <Trash className="h-4 w-4" />
-                            Hapus
-                        </button>
-                    )}
-                    <button
-                        onClick={handleSave}
-                        disabled={submitting}
-                        className={cn(
-                            "flex items-center gap-2 px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-md shadow-lg font-medium transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed",
-                            submitting && "opacity-75 cursor-wait"
-                        )}
-                    >
-                        <Save className="h-4 w-4" />
-                        {submitting ? 'Menyimpan...' : 'Simpan'}
-                    </button>
-                </div>
-            </div>
 
             {/* Sub Tabs */}
             <div className="px-6 pt-4 bg-white border-b border-surface-200 flex-none">
@@ -727,12 +700,71 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
             {/* Content Area */}
             <div className="flex-1 overflow-auto p-6">
                 <div className="max-w-6xl mx-auto">
-                    {subTab === 'umum' && <TabUmum data={formData} onChange={handleChange} units={units} categories={categories} isEdit={isEdit} />}
+                    {subTab === 'umum' && <TabUmum
+                        data={formData}
+                        onChange={handleChange}
+                        units={units}
+                        categories={categories}
+                        isEdit={isEdit}
+                        autoCode={autoCode}
+                        setAutoCode={setAutoCode}
+                    />}
                     {subTab === 'penjualan-pembelian' && <TabPenjualanPembelian data={formData} onChange={handleChange} />}
                     {subTab === 'stok' && <TabStok data={formData} onChange={handleChange} warehouses={warehouses} units={units} isEdit={isEdit} />}
                     {subTab === 'akun' && <TabAkun data={formData} onChange={handleChange} accountList={accountList} />}
                     {subTab === 'lain-lain' && <TabLainLain />}
                 </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="bg-white border-t border-warmgray-300 px-6 py-3 flex items-center justify-end gap-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-50 flex-none">
+                <Tooltip text="Batal / Kembali">
+                    <button
+                        onClick={onCancel}
+                        className="p-3 bg-white hover:bg-warmgray-50 text-warmgray-600 border border-warmgray-300 hover:border-warmgray-400 rounded-lg shadow-sm transition-colors"
+                        type="button"
+                    >
+                        <X className="h-6 w-6" />
+                    </button>
+                </Tooltip>
+
+                {isEdit && (
+                    <Tooltip text="Hapus Barang">
+                        <button
+                            onClick={async () => {
+                                if (confirm('Apakah Anda yakin ingin menghapus barang ini?')) {
+                                    setSubmitting(true);
+                                    try {
+                                        await api.delete(`/items/${initialData.id}`);
+                                        alert('Barang berhasil dihapus');
+                                        onCancel();
+                                    } catch (error: any) {
+                                        console.error('Error deleting item:', error);
+                                        alert(error.response?.data?.error || 'Gagal menghapus barang');
+                                    } finally {
+                                        setSubmitting(false);
+                                    }
+                                }
+                            }}
+                            disabled={submitting}
+                            className="p-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            type="button"
+                        >
+                            <Trash className="h-6 w-6" />
+                        </button>
+                    </Tooltip>
+                )}
+
+                <Tooltip text="Simpan Barang">
+                    <button
+                        onClick={handleSave}
+                        disabled={submitting}
+                        className="p-3 bg-[#d95d39] hover:bg-[#c44e2b] text-white border border-transparent rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        type="button"
+                    >
+                        <Save className="h-6 w-6" />
+                    </button>
+                </Tooltip>
             </div>
         </div>
     );
@@ -741,9 +773,23 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
 // ============================================================================
 // TAB: UMUM
 // ============================================================================
-function TabUmum({ data, onChange, units = [], categories = [], isEdit = false }: { data: any, onChange: (field: string, value: any) => void, units?: any[], categories?: any[], isEdit?: boolean }) {
-    const [autoCode, setAutoCode] = useState(!data.code);
-
+function TabUmum({
+    data,
+    onChange,
+    units = [],
+    categories = [],
+    isEdit = false,
+    autoCode = false,
+    setAutoCode = () => { }
+}: {
+    data: any,
+    onChange: (field: string, value: any) => void,
+    units?: any[],
+    categories?: any[],
+    isEdit?: boolean,
+    autoCode?: boolean,
+    setAutoCode?: (val: boolean) => void
+}) {
     // Sync autoCode with disabled state logic
     useEffect(() => {
         if (!isEdit && autoCode) {
@@ -940,10 +986,57 @@ function TabPenjualanPembelian({ data, onChange }: { data: any, onChange: (field
 // ============================================================================
 function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }: { data: any, onChange: (field: string, value: any) => void, warehouses?: any[], units?: any[], isEdit?: boolean }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingStockIndex, setEditingStockIndex] = useState<number | null>(null);
 
     const handleAddStock = (stockData: any) => {
-        const newStocks = [...(data.openingStocks || []), stockData];
-        onChange('openingStocks', newStocks);
+        if (editingStockIndex !== null) {
+            // Update existing
+            const newStocks = [...(data.openingStocks || [])];
+            newStocks[editingStockIndex] = stockData;
+            onChange('openingStocks', newStocks);
+        } else {
+            // Add new
+            const newStocks = [...(data.openingStocks || []), stockData];
+            onChange('openingStocks', newStocks);
+        }
+        setIsModalOpen(false);
+        setEditingStockIndex(null);
+    };
+
+    const handleDeleteStock = async () => {
+        if (editingStockIndex !== null) {
+            const result = await confirmAction(
+                'Hapus Stok Awal',
+                'Apakah Anda yakin ingin menghapus data stok ini?',
+                'Ya, Hapus'
+            );
+
+            if (result.isConfirmed) {
+                const newStocks = [...(data.openingStocks || [])];
+                newStocks.splice(editingStockIndex, 1);
+                onChange('openingStocks', newStocks);
+                setIsModalOpen(false);
+                setEditingStockIndex(null);
+            }
+        }
+    };
+
+    const handleRowClick = (index: number) => {
+        if (isEdit) return; // Prevent editing stock on Item Edit mode if backend restriction applies, but user asked for it. Assuming allowed. 
+        // Actually, for "Opening Stock", typically it's only allowed during creation or if explicitly allowed. 
+        // User request: "row click maka dapat melakukan edit data". usage matches implementation plan.
+
+        // However, if we are in "Edit Item" mode (isEdit=true), existing stocks might be locked or handled differently.
+        // But the data.openingStocks logic seems to be for transient state before saving.
+        // If the item is already saved, openingStocks might come from DB.
+
+        setEditingStockIndex(index);
+        setIsModalOpen(true);
+    };
+
+    const handleAddNew = () => {
+        setEditingStockIndex(null);
+        setIsModalOpen(true);
     };
 
     const totalQty = (data.openingStocks || []).reduce((sum: number, item: any) => sum + Number(item.quantity), 0);
@@ -971,7 +1064,7 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
             <Card title="Stok Awal" className="w-full" headerAction={
                 !isEdit && (
                     <button
-                        onClick={() => setIsModalOpen(true)}
+                        onClick={handleAddNew}
                         className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium shadow-sm"
                     >
                         <Plus className="h-4 w-4" />
@@ -1005,7 +1098,11 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
                                 </tr>
                             ) : (
                                 data.openingStocks.map((stock: any, idx: number) => (
-                                    <tr key={idx} className="bg-white hover:bg-surface-50 transition-colors">
+                                    <tr
+                                        key={idx}
+                                        className={cn("bg-white transition-colors", !isEdit ? "hover:bg-surface-50 cursor-pointer" : "")}
+                                        onClick={() => !isEdit && handleRowClick(idx)}
+                                    >
                                         <td className="px-6 py-3 text-warmgray-900">{stock.date}</td>
                                         <td className="px-6 py-3 text-warmgray-900">
                                             {warehouses.find(w => w.id === stock.warehouseId)?.name || stock.warehouseId}
@@ -1024,10 +1121,15 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
 
             <StockModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setEditingStockIndex(null);
+                }}
                 onSave={handleAddStock}
                 warehouses={warehouses}
                 units={units}
+                onDelete={editingStockIndex !== null ? handleDeleteStock : undefined}
+                initialData={editingStockIndex !== null ? data.openingStocks[editingStockIndex] : undefined}
             />
         </div>
     );

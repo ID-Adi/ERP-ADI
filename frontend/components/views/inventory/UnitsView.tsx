@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { confirmAction, showSuccess, showError } from '@/lib/swal';
 import { useTabContext } from '@/contexts/TabContext';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function UnitsView() {
     const {
@@ -31,7 +32,8 @@ export default function UnitsView() {
     // Data State
     const [units, setUnits] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchInput, setSearchInput] = useState('');
+    const searchQuery = useDebounce(searchInput, 500);
 
     // Derived state from TabContext
     const activeDataTab = getActiveDataTab();
@@ -120,8 +122,8 @@ export default function UnitsView() {
                 <ListView
                     units={units}
                     loading={loading}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
+                    searchInput={searchInput}
+                    onSearchChange={setSearchInput}
                     onRefresh={fetchUnits}
                     onNewClick={handleNewClick}
                     onRowClick={handleRowClick}
@@ -151,7 +153,7 @@ export default function UnitsView() {
 function ListView({
     units,
     loading,
-    searchQuery,
+    searchInput,
     onSearchChange,
     onRefresh,
     onNewClick,
@@ -183,7 +185,7 @@ function ListView({
                         <span className="px-3 py-1.5 text-sm text-warmgray-500 bg-white">Cari...</span>
                         <input
                             type="text"
-                            value={searchQuery}
+                            value={searchInput}
                             onChange={(e) => onSearchChange(e.target.value)}
                             className="w-48 px-2 py-1.5 text-sm bg-white border-l border-surface-200 focus:outline-none focus:ring-0 placeholder:text-warmgray-400"
                         />
