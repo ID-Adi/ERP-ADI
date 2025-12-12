@@ -15,7 +15,7 @@ export interface SearchableSelectProps {
     options: Option[];
     value?: string;
     onChange: (value: string) => void;
-    label?: string;
+    label?: React.ReactNode;
     placeholder?: string;
     error?: string;
     helperText?: string;
