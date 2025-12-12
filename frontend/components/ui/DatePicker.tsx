@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Calendar from './Calendar'; // Import Custom Calendar
@@ -15,18 +16,57 @@ interface DatePickerProps {
 
 export default function DatePicker({ value, onChange, className, placeholder, disabled }: DatePickerProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const [mounted, setMounted] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
+
+    // Update coordinates when dropdown opens
+    useEffect(() => {
+        if (isOpen && containerRef.current) {
+            const updateCoords = () => {
+                if (containerRef.current) {
+                    const rect = containerRef.current.getBoundingClientRect();
+                    setCoords({
+                        top: rect.bottom + window.scrollY + 4,
+                        left: rect.left + window.scrollX
+                    });
+                }
+            };
+            updateCoords();
+            window.addEventListener('resize', updateCoords);
+            window.addEventListener('scroll', updateCoords, true);
+            return () => {
+                window.removeEventListener('resize', updateCoords);
+                window.removeEventListener('scroll', updateCoords, true);
+            };
+        }
+    }, [isOpen]);
 
     // Close on click outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+            const target = event.target as Node;
+            const calendarEl = document.getElementById('datepicker-calendar-portal');
+
+            if (containerRef.current && !containerRef.current.contains(target)) {
+                // If calendar is open, check if click is inside it
+                if (isOpen && calendarEl && calendarEl.contains(target)) {
+                    return; // Click inside calendar, do nothing
+                }
                 setIsOpen(false);
             }
         };
-        document.addEventListener('mousedown', handleClickOutside);
+
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [isOpen]);
 
     const handleDateSelect = (date: Date) => {
         // Format to YYYY-MM-DD
@@ -44,6 +84,23 @@ export default function DatePicker({ value, onChange, className, placeholder, di
         month: '2-digit',
         year: 'numeric'
     }) : '';
+
+    const calendarDropdown = isOpen && mounted ? (
+        <div
+            id="datepicker-calendar-portal"
+            className="fixed z-[99999] shadow-xl rounded-lg"
+            style={{
+                top: coords.top,
+                left: coords.left
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+        >
+            <Calendar
+                value={value ? new Date(value) : undefined}
+                onChange={handleDateSelect}
+            />
+        </div>
+    ) : null;
 
     return (
         <div className={cn("relative w-full", className)} ref={containerRef}>
@@ -69,14 +126,7 @@ export default function DatePicker({ value, onChange, className, placeholder, di
                 </button>
             </div>
 
-            {isOpen && (
-                <div className="absolute top-full left-0 mt-1 z-[9999] shadow-xl rounded-lg">
-                    <Calendar
-                        value={value ? new Date(value) : undefined}
-                        onChange={handleDateSelect}
-                    />
-                </div>
-            )}
+            {mounted && createPortal(calendarDropdown, document.body)}
         </div>
     );
 }

@@ -500,8 +500,6 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
         batasMinimumStok: initialData?.batasMinimumStok || 0,
         refKodePajak: initialData?.refKodePajak || '',
         ppn: initialData?.ppn || '',
-        aktifkanSeri: initialData?.aktifkanSeri || false,
-        kategoriProduk: initialData?.kategoriProduk || '',
         idHppPky: initialData?.idHppPky || '',
 
         // Accounts State (Mapped by internal ID)
@@ -718,15 +716,7 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
 
             {/* Footer Actions */}
             <div className="bg-white border-t border-warmgray-300 px-6 py-3 flex items-center justify-end gap-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-50 flex-none">
-                <Tooltip text="Batal / Kembali">
-                    <button
-                        onClick={onCancel}
-                        className="p-3 bg-white hover:bg-warmgray-50 text-warmgray-600 border border-warmgray-300 hover:border-warmgray-400 rounded-lg shadow-sm transition-colors"
-                        type="button"
-                    >
-                        <X className="h-6 w-6" />
-                    </button>
-                </Tooltip>
+
 
                 {isEdit && (
                     <Tooltip text="Hapus Barang">
@@ -773,6 +763,9 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
 // ============================================================================
 // TAB: UMUM
 // ============================================================================
+// ============================================================================
+// TAB: UMUM
+// ============================================================================
 function TabUmum({
     data,
     onChange,
@@ -797,79 +790,86 @@ function TabUmum({
             // onChange('code', ''); // Avoiding loop, only if needed
         }
     }, [autoCode, isEdit]);
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card title="Identifikasi Barang" className="h-full">
                 <div className="space-y-4">
-                    <Input
-                        label="Nama Barang"
-                        required
-                        value={data.name}
-                        onChange={(e) => onChange('name', e.target.value)}
-                        placeholder="Contoh: ACP Seven..."
-                    />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Nama Barang <span className="text-danger-600">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={data.name}
+                            onChange={(e) => onChange('name', e.target.value)}
+                            placeholder="Contoh: ACP Seven..."
+                            className="w-full px-3 h-[38px] border border-warmgray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 placeholder-warmgray-400"
+                            required
+                        />
+                    </div>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                             Kode Barang <span className="text-danger-600">*</span>
                         </label>
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (!isEdit) {
+                        <div className="flex gap-2 items-center">
+                            {/* Toggle Switch (Only visible for NEW items) */}
+                            {!isEdit && (
+                                <div
+                                    className="flex items-center justify-center h-[38px] px-2 cursor-pointer group rounded border border-transparent hover:bg-warmgray-50 transition-colors"
+                                    onClick={() => {
                                         const newState = !autoCode;
                                         setAutoCode(newState);
                                         if (newState) onChange('code', ''); // Clear code if auto
-                                    }
-                                }}
-                                disabled={isEdit}
-                                className={cn(
-                                    "flex items-center gap-2 px-3 border rounded-lg transition-colors h-[42px]",
-                                    autoCode ? "bg-primary-50 border-primary-200 text-primary-700" : "bg-white border-gray-300 text-gray-600",
-                                    isEdit && "opacity-50 cursor-not-allowed bg-gray-100"
-                                )}
-                            >
-                                <div className={cn(
-                                    "w-4 h-4 rounded border flex items-center justify-center",
-                                    autoCode ? "bg-primary-600 border-primary-600" : "border-gray-400"
-                                )}>
-                                    {autoCode && <Check className="w-3 h-3 text-white" />}
+                                    }}
+                                    title={!autoCode ? "Mode Manual Aktif" : "Mode Auto-Generated"}
+                                >
+                                    <div className={cn(
+                                        "w-9 h-5 rounded-full relative transition-colors duration-200 ease-in-out flex-shrink-0",
+                                        !autoCode ? "bg-primary-500" : "bg-warmgray-300 group-hover:bg-warmgray-400"
+                                    )}>
+                                        <div className={cn(
+                                            "absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-sm",
+                                            !autoCode ? "translate-x-4.5" : "translate-x-0.5"
+                                        )} style={{ transform: !autoCode ? 'translateX(18px)' : 'translateX(2px)' }} />
+                                    </div>
                                 </div>
-                                <span className="text-sm font-medium">Otomatis</span>
-                            </button>
+                            )}
 
-                            <input
-                                type="text"
-                                value={data.code}
-                                onChange={(e) => {
-                                    onChange('code', e.target.value);
-                                    if (e.target.value) setAutoCode(false); // Disable auto if user types
-                                }}
-                                className={cn(
-                                    "form-input flex-1",
-                                    (isEdit || autoCode) && "bg-surface-100 text-warmgray-500 cursor-not-allowed"
-                                )}
-                                placeholder={autoCode ? "Kode akan digenerate otomatis..." : "Masukkan kode barang"}
-                                disabled={isEdit || autoCode}
-                            />
+                            <div className="relative flex-1">
+                                <input
+                                    type="text"
+                                    value={data.code}
+                                    onChange={(e) => {
+                                        onChange('code', e.target.value);
+                                        if (e.target.value) setAutoCode(false); // Disable auto if user types
+                                    }}
+                                    className={cn(
+                                        "w-full px-3 h-[38px] border rounded text-sm font-medium transition-all focus:outline-none",
+                                        (!autoCode || isEdit)
+                                            ? "bg-white border-warmgray-300 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-warmgray-900"
+                                            : "bg-warmgray-100 border-warmgray-200 text-warmgray-500 cursor-not-allowed select-none"
+                                    )}
+                                    placeholder={autoCode ? "Kode akan digenerate otomatis..." : "Masukkan kode barang"}
+                                    disabled={isEdit || autoCode}
+                                />
+                                {/* Optional Icon if desired */}
+                            </div>
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Jenis Barang <span className="text-warmgray-400 text-xs ml-1">ⓘ</span>
-                        </label>
-                        <select
-                            value={data.type}
-                            onChange={(e) => onChange('type', e.target.value)}
-                            className="form-select w-full"
-                        >
-                            <option value="Persediaan">Persediaan</option>
-                            <option value="Jasa">Jasa</option>
-                            <option value="Non-Persediaan">Non-Persediaan</option>
-                        </select>
-                    </div>
+                    <SearchableSelect
+                        label="Jenis Barang"
+                        value={data.type}
+                        onChange={(val) => onChange('type', val)}
+                        placeholder="Pilih Jenis Barang..."
+                        options={[
+                            { label: 'Persediaan', value: 'Persediaan' },
+                            { label: 'Jasa', value: 'Jasa' },
+                            { label: 'Non-Persediaan', value: 'Non-Persediaan' }
+                        ]}
+                    />
                 </div>
             </Card>
 
@@ -909,26 +909,16 @@ function TabUmum({
                         <div className="relative">
                             <input
                                 type="text"
-                                className="form-input w-full pr-8"
+                                className="w-full px-3 h-[38px] border border-warmgray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
                                 placeholder="Pilih Merek..."
                                 value={data.brand || ''}
                                 onChange={(e) => onChange('brand', e.target.value)}
                             />
-                            <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-warmgray-400 pointer-events-none" />
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-warmgray-400 pointer-events-none" />
                         </div>
                     </div>
 
-                    <div className="pt-2">
-                        <label className="inline-flex items-center">
-                            <input
-                                type="checkbox"
-                                className="rounded border-warmgray-300 text-primary-600 shadow-sm focus:ring-primary-500"
-                                checked={data.aktifkanSeri || false}
-                                onChange={(e) => onChange('aktifkanSeri', e.target.checked)}
-                            />
-                            <span className="ml-2 text-sm text-warmgray-700">Aktifkan No. Seri/Produksi</span>
-                        </label>
-                    </div>
+                    {/* Removed 'Aktifkan No. Seri/Produksi' field as requested */}
                 </div>
             </Card>
         </div>
@@ -939,42 +929,74 @@ function TabUmum({
 // TAB: PENJUALAN / PEMBELIAN
 // ============================================================================
 function TabPenjualanPembelian({ data, onChange }: { data: any, onChange: (field: string, value: any) => void }) {
+    // Helper for numeric inputs with auto-clear '0'
+    const handleNumberFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+        if (e.target.value === '0') {
+            e.target.value = '';
+        }
+    };
+
+    const handleNumberBlur = (e: React.FocusEvent<HTMLInputElement>, field: string) => {
+        if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
+            onChange(field, 0);
+        }
+    };
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card title="Informasi Penjualan" className="h-full">
                 <div className="space-y-4">
-                    <div className="relative">
+                    <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                             Default Diskon (%)
                         </label>
                         <div className="flex items-center gap-2">
                             <input
-                                type="text"
-                                value={data.defaultDiskon || ''}
-                                onChange={e => onChange('defaultDiskon', e.target.value)}
-                                className="form-input w-24"
+                                type="number"
+                                value={data.defaultDiskon === 0 ? '' : data.defaultDiskon}
+                                onChange={e => onChange('defaultDiskon', parseFloat(e.target.value) || 0)}
+                                onFocus={(e) => { if (data.defaultDiskon === 0) e.target.value = ''; }}
+                                onBlur={(e) => handleNumberBlur(e, 'defaultDiskon')}
+                                className="w-24 px-3 h-[38px] border border-warmgray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                placeholder="0"
                             />
                             <span className="text-sm text-warmgray-500">/ Semua Satuan</span>
                         </div>
                     </div>
 
-                    <Input
-                        label="Def. Hrg. Jual Satuan"
-                        type="number"
-                        value={data.sellPrice}
-                        onChange={(e) => onChange('sellPrice', Number(e.target.value))}
-                    />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Def. Hrg. Jual Satuan
+                        </label>
+                        <input
+                            type="number"
+                            value={data.sellPrice === 0 ? '' : data.sellPrice}
+                            onChange={(e) => onChange('sellPrice', Number(e.target.value))}
+                            onFocus={(e) => { if (data.sellPrice === 0) e.target.value = ''; }}
+                            onBlur={(e) => handleNumberBlur(e, 'sellPrice')}
+                            className="w-full px-3 h-[38px] border border-warmgray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            placeholder="0"
+                        />
+                    </div>
                 </div>
             </Card>
 
             <Card title="Informasi Pembelian" className="h-full">
                 <div className="space-y-4">
-                    <Input
-                        label="Harga Beli"
-                        type="number"
-                        value={data.purchasePrice}
-                        onChange={(e) => onChange('purchasePrice', Number(e.target.value))}
-                    />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Harga Beli
+                        </label>
+                        <input
+                            type="number"
+                            value={data.purchasePrice === 0 ? '' : data.purchasePrice}
+                            onChange={(e) => onChange('purchasePrice', Number(e.target.value))}
+                            onFocus={(e) => { if (data.purchasePrice === 0) e.target.value = ''; }}
+                            onBlur={(e) => handleNumberBlur(e, 'purchasePrice')}
+                            className="w-full px-3 h-[38px] border border-warmgray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            placeholder="0"
+                        />
+                    </div>
                 </div>
             </Card>
         </div>
@@ -1005,6 +1027,9 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
 
     const handleDeleteStock = async () => {
         if (editingStockIndex !== null) {
+            // Hide modal temporarily so alert is fully visible and accessible
+            setIsModalOpen(false);
+
             const result = await confirmAction(
                 'Hapus Stok Awal',
                 'Apakah Anda yakin ingin menghapus data stok ini?',
@@ -1015,8 +1040,11 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
                 const newStocks = [...(data.openingStocks || [])];
                 newStocks.splice(editingStockIndex, 1);
                 onChange('openingStocks', newStocks);
-                setIsModalOpen(false);
+                // Modal stays closed
                 setEditingStockIndex(null);
+            } else {
+                // User canceled, modal reappears
+                setIsModalOpen(true);
             }
         }
     };
@@ -1061,19 +1089,19 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
                     className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium shadow-sm"
                 >
                     <Plus className="h-4 w-4" />
-                    <span>Tambah Stok</span>
+                    <span>Tambah Saldo Awal</span>
                 </button>
             }>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto -mx-6 -mb-6 -mt-4">
                     <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-warmgray-500 uppercase bg-surface-50 border-b border-surface-200">
+                        <thead className="text-xs text-white uppercase bg-warmgray-800 border-b border-warmgray-700">
                             <tr>
-                                <th className="px-6 py-3 font-semibold">Tanggal</th>
-                                <th className="px-6 py-3 font-semibold">Gudang</th>
-                                <th className="px-6 py-3 font-semibold text-right">Kuantitas</th>
-                                <th className="px-6 py-3 font-semibold">Satuan</th>
-                                <th className="px-6 py-3 font-semibold text-right">Biaya Satuan</th>
-                                <th className="px-6 py-3 font-semibold text-right">Total</th>
+                                <th className="px-6 py-3 font-semibold tracking-wider">Tanggal</th>
+                                <th className="px-6 py-3 font-semibold tracking-wider">Gudang</th>
+                                <th className="px-6 py-3 font-semibold tracking-wider text-right">Kuantitas</th>
+                                <th className="px-6 py-3 font-semibold tracking-wider">Satuan</th>
+                                <th className="px-6 py-3 font-semibold tracking-wider text-right">Biaya Satuan</th>
+                                <th className="px-6 py-3 font-semibold tracking-wider text-right">Total</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-surface-100">
@@ -1081,9 +1109,6 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
                                 <tr>
                                     <td colSpan={6} className="px-6 py-12 text-center text-warmgray-400">
                                         <div className="flex flex-col items-center gap-2">
-                                            <div className="p-3 bg-surface-50 rounded-full">
-                                                <div className="w-6 h-6 border-2 border-surface-300 rounded-sm" />
-                                            </div>
                                             <p>Belum ada data stok awal</p>
                                         </div>
                                     </td>

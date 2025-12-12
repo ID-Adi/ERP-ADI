@@ -464,8 +464,8 @@ body {
    ======================================== */
 
 ::selection {
-  background: rgba(217, 119, 87, 0.2);
-  color: #5C2E1E;
+  background: rgba(217, 119, 87, 0.3);
+  /* color: #5C2E1E; Removed to prevent contrast issues on dark backgrounds */
 }
 
 /* ========================================
