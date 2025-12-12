@@ -55,7 +55,7 @@ export default function AccountForm({ initialData, onSave, onCancel }: AccountFo
   // Ensure isSubAccount logic syncs with data
   useEffect(() => {
     if (initialData) {
-      setFormData(prev => ({
+      setFormData((prev: typeof formData) => ({
         ...prev,
         isSubAccount: !!initialData.parentId,
         parentId: initialData.parentId || '',
