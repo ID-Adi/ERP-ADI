@@ -164,7 +164,7 @@ export default function InvoiceForm({
         setFormData(prev => {
           // Only update if different (avoid infinite loops)
           if (prev.salespersonId !== lineWithSalesperson.salespersonId) {
-            return { ...prev, salespersonId: lineWithSalesperson.salespersonId };
+            return { ...prev, salespersonId: lineWithSalesperson.salespersonId || '' };
           }
           return prev;
         });
