@@ -90,8 +90,60 @@ router.get('/', async (req: Request, res: Response) => {
             })
         ]);
 
+        // Calculate Balances dynamically from JournalLines
+        const accountIds = accounts.map(a => a.id);
+        const journalAggregates = await prisma.journalLine.groupBy({
+            by: ['accountId'],
+            where: {
+                accountId: { in: accountIds }
+            },
+            _sum: {
+                debit: true,
+                credit: true
+            }
+        });
+
+        // Map aggregates to accounts
+        const balanceMap = new Map<string, { debit: number, credit: number }>();
+        journalAggregates.forEach(agg => {
+            const debit = Number(agg._sum.debit || 0);
+            const credit = Number(agg._sum.credit || 0);
+            balanceMap.set(agg.accountId, { debit, credit });
+        });
+
+        const accountsWithBalance = accounts.map(acc => {
+            const stats = balanceMap.get(acc.id) || { debit: 0, credit: 0 };
+
+            // Determine Normal Balance based on Type
+            // ASSET, EXPENSE, COGS = Normal DEBIT
+            // LIABILITY, EQUITY, INCOME/REVENUE = Normal CREDIT
+            const typeStr = String(acc.type);
+
+            const isDebitNormal =
+                typeStr.includes('ASSET') ||
+                typeStr.includes('EXPENSE') ||
+                typeStr === 'COGS' ||
+                typeStr === 'CASH_AND_BANK' ||
+                typeStr === 'ACCOUNTS_RECEIVABLE' ||
+                typeStr === 'INVENTORY';
+
+            let normalBalance = 0;
+            if (isDebitNormal) {
+                normalBalance = stats.debit - stats.credit;
+            } else {
+                normalBalance = stats.credit - stats.debit;
+            }
+
+            return {
+                ...acc,
+                balance: normalBalance,
+                debitTotal: stats.debit,
+                creditTotal: stats.credit
+            };
+        });
+
         res.json({
-            data: accounts,
+            data: accountsWithBalance,
             total,
             page,
             limit,
