@@ -5,6 +5,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import Input from '@/components/ui/Input';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import DatePicker from '@/components/ui/DatePicker';
+import { showError } from '@/lib/swal';
 
 interface StockModalProps {
       isOpen: boolean;
@@ -73,13 +74,13 @@ export default function StockModal({ isOpen, onClose, onSave, warehouses, units,
 
       if (!isOpen || !mounted) return null;
 
-      const handleSave = () => {
+      const handleSave = async () => {
             if (!formData.warehouseId) {
-                  alert('Pilih gudang terlebih dahulu');
+                  await showError('Data Tidak Lengkap', 'Pilih gudang terlebih dahulu');
                   return;
             }
             if (!formData.unit) {
-                  alert('Pilih satuan terlebih dahulu');
+                  await showError('Data Tidak Lengkap', 'Pilih satuan terlebih dahulu');
                   return;
             }
             onSave(formData);
