@@ -720,7 +720,7 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                     const fullData = response.data.data;
 
                     if (fullData) {
-                        setFormData(prev => ({
+                        setFormData((prev: { accounts: any; }) => ({
                             ...prev,
                             // Merge all relevant fields from fullData
                             openingStocks: fullData.openingStocks || [],
