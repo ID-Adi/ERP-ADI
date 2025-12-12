@@ -20,7 +20,8 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useTabContext } from '@/contexts/TabContext';
-import { confirmAction } from '@/lib/swal';
+import { confirmAction, showSuccess, showError } from '@/lib/swal';
+import Swal from 'sweetalert2';
 import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -304,10 +305,21 @@ function ListView({
                     <FilterButton
                         label="Merek Barang"
                         value={filters.brand}
-                        onClick={() => {
-                            const brand = prompt('Masukkan nama merek (kosongkan untuk Semua):', filters.brand === 'Semua' ? '' : filters.brand);
-                            if (brand !== null) {
-                                onFilterChange({ ...filters, brand: brand || 'Semua' });
+                        onClick={async () => {
+                            const result = await Swal.fire({
+                                title: 'Filter Merek Barang',
+                                input: 'text',
+                                inputValue: filters.brand === 'Semua' ? '' : filters.brand,
+                                inputPlaceholder: 'Masukkan nama merek...',
+                                showCancelButton: true,
+                                confirmButtonText: 'Terapkan',
+                                cancelButtonText: 'Batal',
+                                confirmButtonColor: '#D97757',
+                                cancelButtonColor: '#78716C',
+                            });
+
+                            if (result.isConfirmed) {
+                                onFilterChange({ ...filters, brand: result.value || 'Semua' });
                             }
                         }}
                     />
@@ -510,7 +522,8 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                 return acc;
             }, {})
             : {},
-        openingStocks: initialData?.openingStocks || []
+        openingStocks: initialData?.openingStocks || [],
+        deletedStockIds: []
     };
 
     const [formData, setFormData] = useState({
@@ -536,16 +549,42 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
     const handleSave = async () => {
         // Validation: Name is required. Code is required UNLESS autoCode is true.
         if (!formData.name || (!formData.code && !autoCode)) {
-            addToast({
-                type: 'error',
-                title: 'Data Tidak Lengkap',
-                message: 'Nama Barang dan Kode Barang wajib diisi',
-            });
+            await showError('Data Tidak Lengkap', 'Nama Barang dan Kode Barang wajib diisi');
+            return;
+        }
+
+        // Validation: Critical accounts must be filled
+        const criticalAccounts = [
+            { id: 'persediaan', label: 'Persediaan' },
+            { id: 'penjualan', label: 'Penjualan' },
+            { id: 'bebanPokokPenjualan', label: 'Beban Pokok Penjualan' }
+        ];
+        const missingAccounts = criticalAccounts.filter(acc => !formData.accounts?.[acc.id]);
+        if (missingAccounts.length > 0) {
+            const missingLabels = missingAccounts.map(a => a.label).join(', ');
+            await showError(
+                'Akun Perkiraan Wajib',
+                `Silakan lengkapi akun perkiraan berikut: ${missingLabels}`
+            );
             return;
         }
 
         setSubmitting(true);
         try {
+            // Process Stock Deletions First (User Request: "delete first from api")
+            // This ensures logic is clear: Remove unwanted stocks from DB before updating item.
+            if (isEdit && formData.deletedStockIds && formData.deletedStockIds.length > 0) {
+                for (const stockId of formData.deletedStockIds) {
+                    try {
+                        await api.delete(`/items/transactions/${stockId}`);
+                    } catch (err) {
+                        console.error(`Failed to delete stock transaction ${stockId}`, err);
+                        // We continue even if one fails, or should we abort? 
+                        // Usually safer to continue to attempt to save the rest.
+                    }
+                }
+            }
+
             if (isEdit) {
                 // Transform accounts state back to array for API
                 const payload = {
@@ -672,6 +711,37 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
         fetchData();
     }, [isEdit]);
 
+    // Fetch FULL item details on mount if editing
+    useEffect(() => {
+        const fetchItemDetails = async () => {
+            if (isEdit && initialData?.id) {
+                try {
+                    const response = await api.get(`/items/${initialData.id}`);
+                    const fullData = response.data.data;
+
+                    if (fullData) {
+                        setFormData(prev => ({
+                            ...prev,
+                            // Merge all relevant fields from fullData
+                            openingStocks: fullData.openingStocks || [],
+                            // Ensure accounts and other nested structures are mapped if needed
+                            accounts: fullData.accounts ?
+                                fullData.accounts.reduce((acc: any, curr: any) => {
+                                    const fieldId = Object.keys(ACCOUNT_MAPPING).find(key => ACCOUNT_MAPPING[key] === curr.accountType);
+                                    if (fieldId) acc[fieldId] = curr.accountId;
+                                    return acc;
+                                }, {})
+                                : prev.accounts
+                        }));
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch item details:', error);
+                }
+            }
+        };
+        fetchItemDetails();
+    }, [isEdit, initialData?.id]);
+
     return (
         <div className="flex flex-col h-full bg-surface-50">
 
@@ -722,15 +792,21 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                     <Tooltip text="Hapus Barang">
                         <button
                             onClick={async () => {
-                                if (confirm('Apakah Anda yakin ingin menghapus barang ini?')) {
+                                const result = await confirmAction(
+                                    'Hapus Barang',
+                                    'Apakah Anda yakin ingin menghapus barang ini? Data akan dihapus secara permanen.',
+                                    'Ya, Hapus'
+                                );
+
+                                if (result.isConfirmed) {
                                     setSubmitting(true);
                                     try {
                                         await api.delete(`/items/${initialData.id}`);
-                                        alert('Barang berhasil dihapus');
+                                        await showSuccess('Berhasil', 'Barang berhasil dihapus');
                                         onCancel();
                                     } catch (error: any) {
                                         console.error('Error deleting item:', error);
-                                        alert(error.response?.data?.error || 'Gagal menghapus barang');
+                                        await showError('Gagal Menghapus', error.response?.data?.error || 'Gagal menghapus barang');
                                     } finally {
                                         setSubmitting(false);
                                     }
@@ -1037,6 +1113,13 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
             );
 
             if (result.isConfirmed) {
+                // If it's an existing record (has ID), track it for deletion on Save
+                const stockToDelete = data.openingStocks[editingStockIndex];
+                if (stockToDelete && stockToDelete.id) {
+                    const currentDeleted = data.deletedStockIds || [];
+                    onChange('deletedStockIds', [...currentDeleted, stockToDelete.id]);
+                }
+
                 const newStocks = [...(data.openingStocks || [])];
                 newStocks.splice(editingStockIndex, 1);
                 onChange('openingStocks', newStocks);
@@ -1166,23 +1249,45 @@ const ACCOUNT_MAPPING: any = {
     pembelianBelumTertagih: 'PURCHASE_ACCRUAL'
 };
 
+// Mapping field ID to allowed account types for filtering
+const ACCOUNT_TYPE_FILTER: Record<string, string[]> = {
+    persediaan: ['INVENTORY', 'OTHER_CURRENT_ASSETS'],
+    penjualan: ['REVENUE'],
+    returPenjualan: ['REVENUE'],
+    diskonPenjualan: ['REVENUE', 'EXPENSE'],
+    barangTerkirim: ['INVENTORY', 'OTHER_CURRENT_ASSETS'],
+    bebanPokokPenjualan: ['COGS', 'EXPENSE'],
+    returPembelian: ['INVENTORY', 'OTHER_CURRENT_ASSETS'],
+    pembelianBelumTertagih: ['ACCOUNTS_PAYABLE', 'OTHER_CURRENT_LIABILITIES']
+};
+
 function TabAkun({ data, onChange, accountList = [] }: { data: any, onChange: (field: string, value: any) => void, accountList?: any[] }) {
 
-    // Helper to format accounts for Select
-    const accountOptions = accountList.map(acc => ({
-        label: `[${acc.code}] ${acc.name}`,
-        value: acc.id
-    }));
+    // Helper to format accounts for Select with filtering
+    const getFilteredOptions = (fieldId: string) => {
+        const allowedTypes = ACCOUNT_TYPE_FILTER[fieldId] || [];
+        return accountList
+            .filter(acc => {
+                // Show all if no filter defined, otherwise filter by type
+                if (allowedTypes.length === 0) return true;
+                return allowedTypes.includes(acc.type);
+            })
+            .filter(acc => !acc.isHeader) // Exclude header accounts
+            .map(acc => ({
+                label: `[${acc.code}] ${acc.name}`,
+                value: acc.id
+            }));
+    };
 
     const accountFields = [
-        { id: 'persediaan', label: 'Persediaan' },
-        { id: 'penjualan', label: 'Penjualan' },
-        { id: 'returPenjualan', label: 'Retur Penjualan' },
-        { id: 'diskonPenjualan', label: 'Diskon Penjualan' },
-        { id: 'barangTerkirim', label: 'Barang Terkirim' },
-        { id: 'bebanPokokPenjualan', label: 'Beban Pokok Penjualan' },
-        { id: 'returPembelian', label: 'Retur Pembelian' },
-        { id: 'pembelianBelumTertagih', label: 'Pembelian Belum Tertagih' },
+        { id: 'persediaan', label: 'Persediaan', required: true },
+        { id: 'penjualan', label: 'Penjualan', required: true },
+        { id: 'returPenjualan', label: 'Retur Penjualan', required: false },
+        { id: 'diskonPenjualan', label: 'Diskon Penjualan', required: false },
+        { id: 'barangTerkirim', label: 'Barang Terkirim', required: false },
+        { id: 'bebanPokokPenjualan', label: 'Beban Pokok Penjualan', required: true },
+        { id: 'returPembelian', label: 'Retur Pembelian', required: false },
+        { id: 'pembelianBelumTertagih', label: 'Pembelian Belum Tertagih', required: false },
     ];
 
     const handleAccountChange = (fieldId: string, accountId: any) => {
@@ -1200,10 +1305,15 @@ function TabAkun({ data, onChange, accountList = [] }: { data: any, onChange: (f
                 {accountFields.map(field => (
                     <div key={field.id} className="relative">
                         <SearchableSelect
-                            label={field.label}
+                            label={
+                                <span>
+                                    {field.label}
+                                    {field.required && <span className="text-danger-600 ml-1">*</span>}
+                                </span>
+                            }
                             value={data.accounts?.[field.id] || ''}
                             onChange={(val) => handleAccountChange(field.id, val)}
-                            options={accountOptions}
+                            options={getFilteredOptions(field.id)}
                             placeholder="Pilih Akun..."
                         />
                     </div>
@@ -1212,7 +1322,7 @@ function TabAkun({ data, onChange, accountList = [] }: { data: any, onChange: (f
             <div className="mt-6 flex items-start gap-2 bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-700">
                 <span className="text-xl">ℹ️</span>
                 <p className="text-sm">
-                    Akun-akun yang dapat dipilih sesuai dengan akun-akun yang dimasukkan pada formulir Preferensi bagian akun default barang
+                    Akun bertanda <span className="text-danger-600 font-semibold">*</span> wajib diisi. Daftar akun sudah difilter sesuai tipe yang relevan untuk setiap field.
                 </p>
             </div>
         </Card>

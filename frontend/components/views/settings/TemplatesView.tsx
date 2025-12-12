@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useTabContext } from '@/contexts/TabContext';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { confirmAction, showSuccess, showError } from '@/lib/swal';
 
 interface PrintTemplate {
     id: string;
@@ -190,21 +191,23 @@ export default function TemplatesView() {
             });
 
             if (res.ok) {
+                await showSuccess('Berhasil', 'Template berhasil disimpan');
                 handleCloseForm();
                 fetchTemplates();
             } else {
-                alert('Gagal menyimpan template');
+                await showError('Gagal', 'Gagal menyimpan template');
             }
         } catch (error) {
             console.error('Error saving:', error);
-            alert('Terjadi kesalahan saat menyimpan');
+            await showError('Gagal', 'Terjadi kesalahan saat menyimpan');
         } finally {
             setFormLoading(false);
         }
     };
 
     const handleDelete = async () => {
-        if (!confirm('Apakah Anda yakin ingin menghapus template ini?')) return;
+        const result = await confirmAction('Hapus Template', 'Apakah Anda yakin ingin menghapus template ini?', 'Ya, Hapus');
+        if (!result.isConfirmed) return;
 
         setFormLoading(true);
         try {
@@ -213,14 +216,15 @@ export default function TemplatesView() {
             });
 
             if (res.ok) {
+                await showSuccess('Berhasil', 'Template berhasil dihapus');
                 handleCloseForm();
                 fetchTemplates();
             } else {
-                alert('Gagal menghapus template');
+                await showError('Gagal', 'Gagal menghapus template');
             }
         } catch (error) {
             console.error('Error deleting:', error);
-            alert('Terjadi kesalahan saat menghapus');
+            await showError('Gagal', 'Terjadi kesalahan saat menghapus');
         } finally {
             setFormLoading(false);
         }

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui';
 import { cn, formatCurrency } from '@/lib/utils';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import api from '@/lib/api';
+import { showError } from '@/lib/swal';
 
 interface LineItem {
     id: string;
@@ -441,9 +442,9 @@ export default function ProductDetailModal({
                         </Button>
                     ) : <div />}
 
-                    <Button variant="primary" className="bg-primary-700 hover:bg-primary-800 text-white min-w-[100px] h-9" onClick={() => {
+                    <Button variant="primary" className="bg-primary-700 hover:bg-primary-800 text-white min-w-[100px] h-9" onClick={async () => {
                         if (!formData.warehouseId) {
-                            alert("Mohon pilih gudang terlebih dahulu");
+                            await showError("Data Tidak Lengkap", "Mohon pilih gudang terlebih dahulu");
                             return;
                         }
                         onSave(formData);

@@ -8,6 +8,7 @@ import Card from '@/components/ui/Card';
 import SearchableSelect from '@/components/ui/SearchableSelect'; // Assuming this exists
 import { useTabContext } from '@/contexts/TabContext';
 import api from '@/lib/api';
+import { confirmAction, showSuccess, showError } from '@/lib/swal';
 
 import { createPortal } from 'react-dom';
 
@@ -79,7 +80,7 @@ export default function EmployeeForm({ initialData, onCancel }: EmployeeFormProp
 
       const handleSave = async () => {
             if (!formData.fullName) {
-                  alert('Nama Lengkap wajib diisi');
+                  await showError('Data Tidak Lengkap', 'Nama Lengkap wajib diisi');
                   return;
             }
 
@@ -87,15 +88,15 @@ export default function EmployeeForm({ initialData, onCancel }: EmployeeFormProp
             try {
                   if (isEdit) {
                         await api.put(`/employees/${initialData.id}`, formData);
-                        alert('Data karyawan berhasil diperbarui');
+                        await showSuccess('Berhasil', 'Data karyawan berhasil diperbarui');
                   } else {
                         await api.post('/employees', formData);
-                        alert('Data karyawan berhasil disimpan');
+                        await showSuccess('Berhasil', 'Data karyawan berhasil disimpan');
                   }
                   onCancel();
             } catch (error: any) {
                   console.error('Error saving employee:', error);
-                  alert(error.response?.data?.error || 'Gagal menyimpan data karyawan');
+                  await showError('Gagal', error.response?.data?.error || 'Gagal menyimpan data karyawan');
             } finally {
                   setSubmitting(false);
             }
@@ -103,16 +104,18 @@ export default function EmployeeForm({ initialData, onCancel }: EmployeeFormProp
 
       const handleDelete = async () => {
             if (!isEdit || !initialData?.id) return;
-            if (!confirm('Apakah Anda yakin ingin menghapus data karyawan ini?')) return;
+
+            const result = await confirmAction('Hapus Karyawan', 'Apakah Anda yakin ingin menghapus data karyawan ini?', 'Ya, Hapus');
+            if (!result.isConfirmed) return;
 
             setSubmitting(true);
             try {
                   await api.delete(`/employees/${initialData.id}`);
-                  alert('Data karyawan berhasil dihapus');
+                  await showSuccess('Berhasil', 'Data karyawan berhasil dihapus');
                   onCancel();
             } catch (error: any) {
                   console.error('Error deleting employee:', error);
-                  alert(error.response?.data?.error || 'Gagal menghapus data karyawan');
+                  await showError('Gagal', error.response?.data?.error || 'Gagal menghapus data karyawan');
             } finally {
                   setSubmitting(false);
             }
