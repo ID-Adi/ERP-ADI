@@ -107,7 +107,7 @@ export default function AccountForm({ initialData, onSave, onCancel }: AccountFo
   });
 
   const handleParentSelect = (parent: any) => {
-    setFormData(prev => ({
+    setFormData((prev: typeof formData) => ({
       ...prev,
       parentId: parent.id,
       parentName: parent.name,
@@ -308,8 +308,8 @@ export default function AccountForm({ initialData, onSave, onCancel }: AccountFo
                                         checked={formData.autoCode}
                                         onChange={e => {
                                             const newVal = e.target.checked;
-                                            setFormData(prev => ({
-                                                ...prev, 
+                                            setFormData((prev: typeof formData) => ({
+                                                ...prev,
                                                 autoCode: newVal,
                                                 code: newVal && prev.parentCode ? `${prev.parentCode}.` : prev.code
                                             }));
