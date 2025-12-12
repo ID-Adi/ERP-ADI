@@ -510,7 +510,8 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
                 return acc;
             }, {})
             : {},
-        openingStocks: initialData?.openingStocks || []
+        openingStocks: initialData?.openingStocks || [],
+        deletedStockIds: []
     };
 
     const [formData, setFormData] = useState({
@@ -546,6 +547,20 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
 
         setSubmitting(true);
         try {
+            // Process Stock Deletions First (User Request: "delete first from api")
+            // This ensures logic is clear: Remove unwanted stocks from DB before updating item.
+            if (isEdit && formData.deletedStockIds && formData.deletedStockIds.length > 0) {
+                for (const stockId of formData.deletedStockIds) {
+                    try {
+                        await api.delete(`/items/transactions/${stockId}`);
+                    } catch (err) {
+                        console.error(`Failed to delete stock transaction ${stockId}`, err);
+                        // We continue even if one fails, or should we abort? 
+                        // Usually safer to continue to attempt to save the rest.
+                    }
+                }
+            }
+
             if (isEdit) {
                 // Transform accounts state back to array for API
                 const payload = {
@@ -671,6 +686,37 @@ function ItemForm({ initialData, onCancel }: { initialData?: any, onCancel: () =
         };
         fetchData();
     }, [isEdit]);
+
+    // Fetch FULL item details on mount if editing
+    useEffect(() => {
+        const fetchItemDetails = async () => {
+            if (isEdit && initialData?.id) {
+                try {
+                    const response = await api.get(`/items/${initialData.id}`);
+                    const fullData = response.data.data;
+
+                    if (fullData) {
+                        setFormData(prev => ({
+                            ...prev,
+                            // Merge all relevant fields from fullData
+                            openingStocks: fullData.openingStocks || [],
+                            // Ensure accounts and other nested structures are mapped if needed
+                            accounts: fullData.accounts ?
+                                fullData.accounts.reduce((acc: any, curr: any) => {
+                                    const fieldId = Object.keys(ACCOUNT_MAPPING).find(key => ACCOUNT_MAPPING[key] === curr.accountType);
+                                    if (fieldId) acc[fieldId] = curr.accountId;
+                                    return acc;
+                                }, {})
+                                : prev.accounts
+                        }));
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch item details:', error);
+                }
+            }
+        };
+        fetchItemDetails();
+    }, [isEdit, initialData?.id]);
 
     return (
         <div className="flex flex-col h-full bg-surface-50">
@@ -1037,6 +1083,13 @@ function TabStok({ data, onChange, warehouses = [], units = [], isEdit = false }
             );
 
             if (result.isConfirmed) {
+                // If it's an existing record (has ID), track it for deletion on Save
+                const stockToDelete = data.openingStocks[editingStockIndex];
+                if (stockToDelete && stockToDelete.id) {
+                    const currentDeleted = data.deletedStockIds || [];
+                    onChange('deletedStockIds', [...currentDeleted, stockToDelete.id]);
+                }
+
                 const newStocks = [...(data.openingStocks || [])];
                 newStocks.splice(editingStockIndex, 1);
                 onChange('openingStocks', newStocks);
