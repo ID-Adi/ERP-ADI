@@ -2,6 +2,7 @@
 
 import { useState, useCallback, ReactNode, useEffect } from 'react';
 import TabBar from './TabBar';
+import { confirmAction } from '@/lib/swal';
 
 export interface InvoiceTab {
   id: string;
@@ -95,11 +96,16 @@ export default function TabbedInvoiceEditor({ children, initialTabData }: Tabbed
 
   // Close tab
   const closeTab = useCallback(
-    (tabId: string) => {
+    async (tabId: string) => {
       const tab = tabs.find((t) => t.id === tabId);
 
       if (tab?.hasUnsavedChanges) {
-        if (!window.confirm('Ada perubahan yang belum disimpan. Tutup tab ini?')) {
+        const result = await confirmAction(
+          'Ada Perubahan',
+          'Ada perubahan yang belum disimpan. Tutup tab ini?',
+          'Ya, Tutup'
+        );
+        if (!result.isConfirmed) {
           return;
         }
       }

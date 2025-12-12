@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
+import { confirmAction, showSuccess, showError } from '@/lib/swal';
 
 interface AccountFormProps {
   initialData?: any;
@@ -119,7 +120,7 @@ export default function AccountForm({ initialData, onSave, onCancel }: AccountFo
 
   const handleSave = async () => {
     if (!formData.code || !formData.name) {
-      alert('Mohon lengkapi Kode dan Nama');
+      await showError('Data Tidak Lengkap', 'Mohon lengkapi Kode dan Nama');
       return;
     }
 
@@ -136,26 +137,31 @@ export default function AccountForm({ initialData, onSave, onCancel }: AccountFo
 
       if (isEdit) {
         await api.put(`/accounts/${initialData.id}`, payload);
+        await showSuccess('Berhasil', 'Akun berhasil diperbarui');
       } else {
         await api.post('/accounts', payload);
+        await showSuccess('Berhasil', 'Akun berhasil disimpan');
       }
       onSave();
     } catch (error: any) {
       console.error(error);
-      alert(error.response?.data?.error || 'Gagal menyimpan data');
+      await showError('Gagal', error.response?.data?.error || 'Gagal menyimpan data');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async () => {
-      if(!confirm('Apakah anda yakin ingin menghapus akun ini?')) return;
+      const result = await confirmAction('Hapus Akun', 'Apakah anda yakin ingin menghapus akun ini?', 'Ya, Hapus');
+      if (!result.isConfirmed) return;
+
       setLoading(true);
       try {
           await api.delete(`/accounts/${initialData.id}`);
+          await showSuccess('Berhasil', 'Akun berhasil dihapus');
           onSave(); // Treat as save/refresh
       } catch (error: any) {
-          alert(error.response?.data?.error || 'Gagal menghapus');
+          await showError('Gagal', error.response?.data?.error || 'Gagal menghapus');
       } finally {
           setLoading(false);
       }

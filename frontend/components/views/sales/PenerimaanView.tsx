@@ -25,6 +25,7 @@ import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui';
 import api from '@/lib/api';
+import { confirmAction, showSuccess, showError } from '@/lib/swal';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import { createPortal } from 'react-dom';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -565,7 +566,7 @@ function ReceiptForm({ initialData, onCancel, onSuccess }: { initialData?: any, 
 
     const handleSave = async () => {
         if (!formData.customerId || !formData.bankId || selectedInvoices.length === 0) {
-            alert("Harap lengkapi data (Customer, Bank, dan Faktur)");
+            await showError("Data Tidak Lengkap", "Harap lengkapi data (Customer, Bank, dan Faktur)");
             return;
         }
 
@@ -588,13 +589,15 @@ function ReceiptForm({ initialData, onCancel, onSuccess }: { initialData?: any, 
         try {
             if (isEdit && initialData?.id) {
                 await api.put(`/sales-receipts/${initialData.id}`, finalPayload);
+                await showSuccess('Berhasil', 'Penerimaan berhasil diperbarui');
             } else {
                 await api.post('/sales-receipts', finalPayload);
+                await showSuccess('Berhasil', 'Penerimaan berhasil disimpan');
             }
             onSuccess();
         } catch (err: any) {
             console.error(err);
-            alert(err.response?.data?.message || "Gagal menyimpan");
+            await showError('Gagal', err.response?.data?.message || "Gagal menyimpan");
         }
     };
 
@@ -613,14 +616,17 @@ function ReceiptForm({ initialData, onCancel, onSuccess }: { initialData?: any, 
 
     const handleDelete = async () => {
         if (!initialData?.id) return;
-        if (!confirm("Apakah Anda yakin ingin menghapus data ini?")) return;
+
+        const result = await confirmAction("Hapus Penerimaan", "Apakah Anda yakin ingin menghapus data ini?", "Ya, Hapus");
+        if (!result.isConfirmed) return;
 
         try {
             await api.delete(`/sales-receipts/${initialData.id}`);
+            await showSuccess('Berhasil', 'Penerimaan berhasil dihapus');
             onSuccess();
         } catch (err: any) {
             console.error(err);
-            alert(err.response?.data?.message || "Gagal menghapus");
+            await showError('Gagal', err.response?.data?.message || "Gagal menghapus");
         }
     };
 
@@ -731,9 +737,9 @@ function ReceiptForm({ initialData, onCancel, onSuccess }: { initialData?: any, 
                                 <SearchableSelect
                                     options={invoiceOptions}
                                     value=""
-                                    onChange={(val) => {
+                                    onChange={async (val) => {
                                         if (!formData.customerId) {
-                                            alert("Pilih Pelanggan Terlebih Dahulu");
+                                            await showError("Data Tidak Lengkap", "Pilih Pelanggan Terlebih Dahulu");
                                             return;
                                         }
                                         if (!val) return;
@@ -915,8 +921,9 @@ function ReceiptItemModal({
                 </div>
                 <div className="px-4 py-3 border-t border-warmgray-200 bg-warmgray-50 flex justify-between items-center">
                     <button
-                        onClick={() => {
-                            if (confirm('Hapus item ini dari daftar pembayaran?')) onDelete();
+                        onClick={async () => {
+                            const result = await confirmAction('Hapus Item', 'Hapus item ini dari daftar pembayaran?', 'Ya, Hapus');
+                            if (result.isConfirmed) onDelete();
                         }}
                         className="px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50 border border-red-200 rounded hover:border-red-300 transition-colors flex items-center gap-1"
                     >
