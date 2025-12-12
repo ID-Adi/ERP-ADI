@@ -6,24 +6,31 @@ interface PaymentTermSelectProps {
     onChange: (value: string, days?: number) => void;
     className?: string;
     disabled?: boolean;
+    terms?: PaymentTerm[];
 }
 
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export default function PaymentTermSelect({ value, onChange, className = '', disabled = false }: PaymentTermSelectProps) {
-    const [terms, setTerms] = useState<PaymentTerm[]>([]);
+export default function PaymentTermSelect({ value, onChange, className = '', disabled = false, terms: externalTerms }: PaymentTermSelectProps) {
+    const [internalTerms, setInternalTerms] = useState<PaymentTerm[]>([]);
     const [loading, setLoading] = useState(true);
     const [isOpen, setIsOpen] = useState(false);
 
+    const terms = externalTerms || internalTerms;
+
     useEffect(() => {
-        loadTerms();
-    }, []);
+        if (externalTerms) {
+            setLoading(false);
+        } else {
+            loadTerms();
+        }
+    }, [externalTerms]);
 
     const loadTerms = async () => {
         try {
             const data = await paymentTermApi.getAll();
-            setTerms(data);
+            setInternalTerms(data);
         } catch (error) {
             console.error('Failed to load payment terms', error);
         } finally {

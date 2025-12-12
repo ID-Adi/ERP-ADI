@@ -50,6 +50,7 @@ import InvoiceCostsView, { CostItem } from './invoice/InvoiceCostsView';
 import InvoiceHistoryView from './invoice/InvoiceHistoryView';
 import CustomerSelect from './invoice/CustomerSelect';
 import PaymentTermSelect from '@/components/business/payment/PaymentTermSelect';
+import { paymentTermApi } from '@/lib/api/paymentTerms';
 
 // --- Interfaces ---
 interface LineItem {
@@ -116,6 +117,7 @@ export default function InvoiceForm({
 
   // Data State
   const [customers, setCustomers] = useState<any[]>([]);
+  const [paymentTermsList, setPaymentTermsList] = useState<any[]>([]);
 
   // Centralized State
   const [formData, setFormData] = useState({
@@ -133,17 +135,21 @@ export default function InvoiceForm({
 
   const [lines, setLines] = useState<LineItem[]>(initialData.lines || []);
 
-  // Fetch Customers
+  // Fetch Customers and PaymentTerms
   useEffect(() => {
-    const fetchCustomers = async () => {
+    const fetchData = async () => {
       try {
-        const response = await api.get('/customers');
-        setCustomers(response.data.data || []);
+        const [customersResponse, paymentTermsResponse] = await Promise.all([
+            api.get('/customers'),
+            paymentTermApi.getAll()
+        ]);
+        setCustomers(customersResponse.data.data || []);
+        setPaymentTermsList(paymentTermsResponse);
       } catch (error) {
-        console.error('Failed to fetch customers:', error);
+        console.error('Failed to fetch data:', error);
       }
     };
-    fetchCustomers();
+    fetchData();
   }, []);
 
   // Memoize customers to avoid re-rendering CustomerSelect
@@ -720,6 +726,7 @@ export default function InvoiceForm({
               formData={formData}
               onChange={handleFormChange}
               onPaymentTermChange={handlePaymentTermChange}
+              paymentTermsList={paymentTermsList}
             />
           )}
 
