@@ -321,21 +321,105 @@ page.tsx (thin wrapper)
 
 ## 🔧 TECHNICAL IMPROVEMENTS
 
-### 1. Infinite Scroll Implementation (Daftar Pattern)
+### 1. Data Fetching with Debounced Search (Daftar Pattern)
 ```tsx
-import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
-import LoadingMoreItems from '@/components/inventory/LoadingMoreItems';
+// Pattern dari PelangganView - BUKAN infinite scroll untuk fase awal
+// Infinite scroll ditambahkan di Phase 3 untuk production optimization
 
-// Custom hook dari pattern daftar
+import { useDebounce } from '@/hooks/useDebounce';
+import { useState, useCallback, useEffect } from 'react';
+
+// State untuk data & filtering
+const [items, setItems] = useState<any[]>([]);
+const [loading, setLoading] = useState(true);
+const [searchInput, setSearchInput] = useState(''); // User input (immediate)
+const searchQuery = useDebounce(searchInput, 500); // Debounced search query
+
+// Fetch function dengan debounced search
+const fetchItems = useCallback(async () => {
+  setLoading(true);
+  try {
+    const params: any = { limit: 100 };
+    if (searchQuery) params.search = searchQuery;
+    // Add other filters sesuai kebutuhan
+
+    const response = await api.get('/items/stocks', params);
+    const data = response.data.data || response.data || [];
+    if (Array.isArray(data)) {
+      setItems(data);
+    } else {
+      setItems([]);
+    }
+  } catch (error) {
+    console.error('Failed to fetch items:', error);
+    setItems([]);
+  } finally {
+    setLoading(false);
+  }
+}, [searchQuery]); // Refetch otomatis saat searchQuery berubah
+
+useEffect(() => {
+  fetchItems();
+}, [fetchItems]);
+
+// Di JSX:
+<table className="w-full text-sm text-left">
+  <thead className="text-xs text-white uppercase bg-warmgray-800 sticky top-0 z-10">
+    {/* Headers */}
+  </thead>
+  <tbody className="divide-y divide-surface-200">
+    {loading ? (
+      // Skeleton loading
+      Array.from({ length: 5 }).map((_, i) => (
+        <tr key={i} className="animate-pulse bg-white">
+          <td colSpan={7} className="px-4 py-3">
+            <div className="h-4 bg-surface-200 rounded w-full"></div>
+          </td>
+        </tr>
+      ))
+    ) : items.length === 0 ? (
+      <tr>
+        <td colSpan={7} className="px-4 py-12 text-center text-warmgray-500">
+          Tidak ada data barang
+        </td>
+      </tr>
+    ) : (
+      items.map((item, index) => (
+        <tr
+          key={item.id}
+          onClick={() => onRowClick(item)}
+          className={cn(
+            "hover:bg-primary-50 transition-colors cursor-pointer",
+            index % 2 === 0 ? 'bg-white' : 'bg-surface-50/50'
+          )}
+        >
+          {/* Row content */}
+        </tr>
+      ))
+    )}
+  </tbody>
+</table>
+```
+
+**Phase 1 Pattern (Current):**
+- ✅ Simple data fetching dengan `useCallback` & `useEffect`
+- ✅ Debounced search dengan `useDebounce` hook
+- ✅ Loading skeleton states
+- ✅ Empty state handling
+- ✅ No infinite scroll (add di Phase 3 jika perlu untuk dataset besar)
+
+**Phase 3 Enhancement (Future - Infinite Scroll):**
+```tsx
+// Jika dataset > 1000 items, upgrade ke infinite scroll dengan IntersectionObserver
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
+
 const { data: items, loading, hasMore, lastElementRef } = useInfiniteScroll({
   fetchData: async (page) => {
     const response = await api.get('/items/stocks', {
       params: {
         page,
-        limit: 20,
+        limit: 50,
         search: searchQuery,
-        warehouseId: selectedWarehouse,
-        category: selectedCategory
       }
     });
     return {
@@ -345,16 +429,12 @@ const { data: items, loading, hasMore, lastElementRef } = useInfiniteScroll({
   }
 });
 
-// Di table:
-<table>
-  <tbody>
-    {items.map((item, idx) => (
-      <tr key={item.id} ref={idx === items.length - 1 ? lastElementRef : null}>
-        {/* Row content */}
-      </tr>
-    ))}
-  </tbody>
-</table>
+// Render last item dengan ref untuk IntersectionObserver
+{items.map((item, idx) => (
+  <tr key={item.id} ref={idx === items.length - 1 ? lastElementRef : null}>
+    {/* Row content */}
+  </tr>
+))}
 
 {loading && <LoadingMoreItems />}
 {!hasMore && items.length > 0 && (
@@ -363,13 +443,6 @@ const { data: items, loading, hasMore, lastElementRef } = useInfiniteScroll({
   </p>
 )}
 ```
-
-**Keuntungan pattern ini:**
-- ✅ IntersectionObserver API untuk infinite scroll (tidak perlu scroll event listener)
-- ✅ Auto-dedup items berdasarkan ID (mencegah duplikat)
-- ✅ Abort signal untuk cancel pending requests
-- ✅ Reset function saat filter berubah
-- ✅ Proven pattern dari PelangganView, PesananView, dll
 
 ### 2. LoadingMoreItems Component
 ```tsx
@@ -444,43 +517,69 @@ export default function LoadingMoreItems() {
 }
 ```
 
-### 3. Data Handling dengan Pagination
+### 2b. Toolbar Implementation (Daftar Pattern)
 ```tsx
-// State management
-const [items, setItems] = useState<ItemStock[]>([]);
-const [page, setPage] = useState(1);
-const [hasMore, setHasMore] = useState(true);
-const [loading, setLoading] = useState(false);
+// SEBELUM (Items-Per-Warehouse - simple toolbar)
+<div className="px-4 py-3 bg-surface-50">
+  <input type="text" placeholder="Search..." />
+  <select><option>Semua</option></select>
 
-// Load more function
-const loadMoreItems = async () => {
-  setLoading(true);
-  try {
-    const response = await api.get('/items/stocks', {
-      params: {
-        page: page + 1,
-        limit: 20,
-        search: searchQuery,
-        warehouseId: selectedWarehouse,
-        category: selectedCategory,
-      }
-    });
+// SESUDAH (Daftar Pattern - from PelangganView)
+<div className="flex items-center justify-between px-4 py-2 bg-surface-50 border-b border-surface-200 flex-none">
+  {/* LEFT: Add + Refresh buttons */}
+  <div className="flex items-center gap-1">
+    <button
+      onClick={onNewClick}
+      className="flex items-center justify-center w-8 h-8 bg-primary-600 hover:bg-primary-700 text-white rounded transition-colors"
+    >
+      <Plus className="h-4 w-4" />
+    </button>
+    <button
+      onClick={onRefresh}
+      className="flex items-center justify-center w-8 h-8 border border-surface-300 hover:bg-surface-100 text-warmgray-600 rounded transition-colors bg-white"
+    >
+      <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+    </button>
+  </div>
 
-    const newItems = response.data.data || [];
-    setItems(prev => [...prev, ...newItems]);
-    setPage(prev => prev + 1);
+  {/* RIGHT: Export + Search + Count */}
+  <div className="flex items-center gap-2">
+    {/* Action Buttons Group */}
+    <div className="flex items-center border border-surface-300 rounded bg-white">
+      <button className="flex items-center justify-center w-8 h-8 hover:bg-surface-100 text-warmgray-600 border-r border-surface-200 rounded-l transition-colors">
+        <Download className="h-4 w-4" />
+      </button>
+      <button className="flex items-center justify-center w-8 h-8 hover:bg-surface-100 text-warmgray-600 rounded-r transition-colors">
+        <Printer className="h-4 w-4" />
+      </button>
+    </div>
 
-    // Check if there are more items
-    if (newItems.length < 20) {
-      setHasMore(false);
-    }
-  } catch (error) {
-    console.error('Failed to load items:', error);
-  } finally {
-    setLoading(false);
-  }
-};
+    {/* Search */}
+    <div className="flex items-center border border-surface-300 rounded overflow-hidden bg-white">
+      <span className="px-3 py-1.5 text-sm text-warmgray-500">Cari...</span>
+      <input
+        type="text"
+        placeholder=""
+        value={searchInput}
+        onChange={(e) => setSearchInput(e.target.value)}
+        className="w-32 px-2 py-1.5 text-sm bg-white border-l border-surface-200 focus:outline-none focus:ring-0"
+      />
+    </div>
+
+    {/* Count */}
+    <span className="text-sm text-warmgray-600 font-medium">
+      {items.length.toLocaleString()}
+    </span>
+  </div>
+</div>
 ```
+
+**Toolbar Pattern Notes:**
+- ✅ LEFT: Add ([+]) + Refresh ([🔄]) buttons
+- ✅ RIGHT: Download + Print | Search input | Item count
+- ✅ Spacing: `gap-1` (compact) vs `gap-2` (spread)
+- ✅ Styling: `border border-surface-300` untuk action buttons group
+- ✅ Hover states konsisten: `hover:bg-surface-100`
 
 ---
 
@@ -570,23 +669,62 @@ const loadMoreItems = async () => {
 </div>
 ```
 
-### Table Header
+### Table Header & Row Styling (Daftar Pattern)
 ```tsx
 // SEBELUM
 <thead className="bg-[#546e7a] text-white">
   <tr>
     <th className="px-4 py-3 text-left">Nama Barang</th>
+    {/* No striping, simple hover */}
 
-// SESUDAH
-<thead className="bg-warmgray-50 sticky top-0 z-20 border-b border-warmgray-200">
-  <tr>
-    <th className="py-2 px-2 w-[30px] text-center font-semibold text-warmgray-600 border-r border-warmgray-200">
-      No
-    </th>
-    <th className="py-2 px-4 text-left font-semibold text-warmgray-600 border-r border-warmgray-200">
-      Nama Barang & Jasa
-    </th>
+// SESUDAH (Daftar Pattern - from PelangganView)
+<div className="flex-1 overflow-auto relative">
+  <table className="w-full text-sm text-left">
+    <thead className="text-xs text-white uppercase bg-warmgray-800 sticky top-0 z-10">
+      <tr>
+        <th className="px-4 py-2 font-medium">No</th>
+        <th className="px-4 py-2 font-medium">Nama Barang & Jasa</th>
+        <th className="px-4 py-2 font-medium">Kode</th>
+        <th className="px-4 py-2 font-medium">Kategori</th>
+        <th className="px-4 py-2 font-medium">Gudang</th>
+        <th className="px-4 py-2 font-medium text-right">Qty</th>
+        <th className="px-4 py-2 font-medium">Satuan</th>
+      </tr>
+    </thead>
+    <tbody className="divide-y divide-surface-200">
+      {items.map((item, index) => (
+        <tr
+          key={item.id}
+          onClick={() => onRowClick(item)}
+          className={cn(
+            "hover:bg-primary-50 transition-colors cursor-pointer group",
+            index % 2 === 0 ? 'bg-white' : 'bg-surface-50/50'
+          )}
+        >
+          <td className="px-4 py-2 font-semibold text-warmgray-600 text-center">
+            {index + 1}
+          </td>
+          <td className="px-4 py-2 font-medium text-warmgray-900">{item.name}</td>
+          <td className="px-4 py-2 text-warmgray-600">{item.code}</td>
+          <td className="px-4 py-2 text-warmgray-600">{item.category}</td>
+          <td className="px-4 py-2 text-warmgray-600">{item.warehouse}</td>
+          <td className="px-4 py-2 text-right text-warmgray-600">{item.quantity}</td>
+          <td className="px-4 py-2 text-warmgray-600">{item.unit}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
 ```
+
+**Key Pattern Differences from Faktur:**
+- ✅ Header: `bg-warmgray-800 text-white` (konsisten dengan PelangganView, bukan `bg-[#546e7a]`)
+- ✅ Zebra striping: `index % 2 === 0 ? 'bg-white' : 'bg-surface-50/50'` (alternating rows)
+- ✅ Hover: `hover:bg-primary-50 transition-colors cursor-pointer` (interactive & consistent)
+- ✅ Padding: `px-4 py-2` (consistent dengan PelangganView pattern, not `px-4 py-3`)
+- ✅ Row borders: `divide-y divide-surface-200` (subtle dividers)
+- ✅ Text colors: `text-warmgray-*` (proper design token usage)
+- ✅ No badges/indicators di dasar - optional untuk Phase 3
 
 ### Loading State
 ```tsx
@@ -605,62 +743,92 @@ const loadMoreItems = async () => {
 
 ---
 
-## 🚀 IMPLEMENTATION ROADMAP
+## 🚀 IMPLEMENTATION ROADMAP (Daftar Pattern)
 
-### Phase 1: Quick Wins (2-3 jam)
-- [ ] Create LoadingMoreItems component ✅ DONE
-- [ ] Replace hardcoded colors with warmgray palette
-- [ ] Fix debounce with useDebounce hook
-- [ ] Add numbering column
-- [ ] Update table styling (header, borders)
-- [ ] Implement react-infinite-scroll-component
+### Phase 1: Quick Wins ✅ 80% COMPLETE
+- [x] Create LoadingMoreItems component ✅ DONE
+- [x] Replace hardcoded colors with warmgray palette ✅ DONE
+- [x] Fix debounce with useDebounce hook ✅ DONE
+- [x] Add numbering column ✅ DONE
+- [x] Update table styling (header, borders, striped rows) ✅ DONE
+- [ ] Implement basic Daftar pattern layout (toolbar, table, search)
 
-**Files to change**:
-- `page.tsx` - color updates, debounce fix, numbering
-- Add import: `LoadingMoreItems` component
+**Files modified**:
+- `frontend/app/dashboard/inventory/items-per-warehouse/page.tsx` ✅ MODIFIED
+- `frontend/components/inventory/LoadingMoreItems.tsx` ✅ CREATED
 
 ---
 
-### Phase 2: Architecture (3-4 jam)
-- [ ] Extract `ItemsPerWarehouseView.tsx`
-- [ ] Extract `ItemsPerWarehouseTable.tsx`
-- [ ] Extract `StockHistoryModal.tsx`
-- [ ] Create `useItemsPerWarehouse.ts` hook
-- [ ] Use Modal UI component
+### Phase 2: Component Extraction & Daftar Pattern
+- [ ] Extract `ItemsPerWarehouseView.tsx` (main smart component dari PelangganView pattern)
+  - State management: items, loading, searchInput, searchQuery
+  - Data fetching dengan useCallback & useEffect
+  - Row click handler dengan TabContext integration
+
+- [ ] Extract `ListView` sub-component (dari phase 1 page.tsx)
+  - Toolbar dengan [+Add] [🔄Refresh] | [Export] [Print] [Search] [Count]
+  - Filter buttons (optional untuk phase 2)
+  - Table dengan header `bg-warmgray-800 text-white`
+  - Zebra striped rows dengan hover states
+  - Skeleton loading states
+  - Empty state handling
+
+- [ ] Extract `StockHistoryModal.tsx` (modal untuk detail history)
+  - Real data fetching dari API
+  - Pagination untuk history records
+  - Modal UI component integration
 
 **Files to create**:
-- `components/views/inventory/ItemsPerWarehouseView.tsx`
-- `components/inventory/ItemsPerWarehouseTable.tsx`
-- `components/inventory/StockHistoryModal.tsx`
-- `hooks/useItemsPerWarehouse.ts`
+- `components/views/inventory/ItemsPerWarehouseView.tsx` (main component - 150-200 lines)
+- `components/inventory/ItemsPerWarehouseModal.tsx` (modal untuk detail - 100-150 lines)
+- Page.tsx menjadi simple wrapper: hanya import & render ItemsPerWarehouseView
 
 ---
 
-### Phase 3: Advanced Features (4-5 jam)
-- [ ] Implement advanced filter system
-- [ ] Add category filter & dropdown
-- [ ] Add stock status filter
-- [ ] Add date range filter
-- [ ] Add skeleton loading states for table
-- [ ] Expandable rows with details
-- [ ] Real-time status calculation
+### Phase 3: Advanced Features & Infinite Scroll
+- [ ] Add advanced filter bar (seperti PelangganView)
+  - Filter buttons: Status, Kategori, Warehouse
+  - Advanced filter modal (optional)
+  - Reset filters button
+
+- [ ] Add data validation & error handling
+  - API error states
+  - Network retry logic
+  - User feedback notifications
+
+- [ ] Upgrade to infinite scroll (jika dataset > 1000 items)
+  - Implement useInfiniteScroll hook integration
+  - LoadingMoreItems component untuk loader
+  - Auto-reset saat filter berubah
+  - IntersectionObserver untuk scroll detection
+
+- [ ] Add expandable rows (optional)
+  - Product details expansion
+  - Stock level visualization
+  - Recent history summary
 
 **Features**:
-- Category filter (Dropdown with categories)
-- Stock status filter (All, OK, Low Stock, Out of Stock)
-- Infinite scroll dengan LoadingMoreItems loader
-- Real history data with calculations
-- Status badges with colors
+- Advanced filtering dengan visual feedback
+- Infinite scroll dengan LoadingMoreItems (jika perlu)
+- Real-time status badges (OK, Low Stock, Out of Stock)
+- Stock level indicators dengan colors
 
 ---
 
-### Phase 4: Polish & Optimization (2-3 jam)
-- [ ] Add export functionality
-- [ ] Implement sorting (by column)
+### Phase 4: Polish & Optimization
+- [ ] Add export functionality (CSV, PDF)
+- [ ] Implement column sorting
 - [ ] Add search auto-complete
-- [ ] Performance optimization (virtualization)
-- [ ] Error handling & fallbacks
-- [ ] Empty state illustrations
+- [ ] Performance optimization
+  - Memoization untuk rows
+  - Virtual scrolling untuk large datasets
+  - API response caching
+
+- [ ] Enhanced UX
+  - Keyboard navigation
+  - Bulk actions (select multiple items)
+  - Print-friendly layout
+  - Mobile-responsive adjustments
 
 ---
 
@@ -726,26 +894,43 @@ const loadMoreItems = async () => {
 
 ## ✅ DESIGN SYSTEM COMPLIANCE CHECKLIST
 
-Saat implementasi, pastikan:
+Saat implementasi (ikuti Daftar Pattern):
 
-- [ ] Menggunakan warmgray palette (bukan custom colors)
-- [ ] Header = bg-warmgray-50, text = text-warmgray-600
-- [ ] Borders = border-warmgray-200
-- [ ] Numbering column dengan font-semibold text-warmgray-600
-- [ ] Striped rows: odd:bg-white even:bg-[#fafafb]
-- [ ] Hover state: hover:bg-primary-50 transition-colors
-- [ ] Modal header: bg-warmgray-900 (bukan custom)
-- [ ] Spacing konsisten (px-4 py-2 untuk cells, p-6 untuk sections)
-- [ ] Border radius: rounded (bukan rounded-lg) untuk consistency
-- [ ] Loading state: LoadingMoreItems component (dengan shimmer + dots)
-- [ ] Empty state: italic text-warmgray-400
-- [ ] Buttons: Use Button component dengan variants
-- [ ] Select/Dropdown: Use SearchableSelect component
-- [ ] Modal: Use Modal component dari UI
-- [ ] Z-index: Follow hierarchy (z-50 untuk dropdown, z-[9999] untuk modal)
-- [ ] Debounce: Use useDebounce hook
-- [ ] Responsive: Mobile-first, grid-cols-1 md:grid-cols-2
-- [ ] Infinite Scroll: Use react-infinite-scroll-component with LoadingMoreItems loader
+**Color & Styling:**
+- [x] Menggunakan warmgray palette (bukan custom colors) ✅ PHASE 1 DONE
+- [x] Table header: `bg-warmgray-800 text-white` (from PelangganView) ✅ PHASE 1 DONE
+- [x] Row striping: `odd:bg-white even:bg-surface-50/50` ✅ PHASE 1 DONE
+- [x] Hover state: `hover:bg-primary-50 transition-colors cursor-pointer` ✅ PHASE 1 DONE
+- [x] Borders: `border-surface-200` untuk row dividers ✅ PHASE 1 DONE
+- [x] Modal header: `bg-warmgray-900` ✅ PHASE 1 DONE
+
+**Components & Features:**
+- [x] Numbering column dengan `font-semibold text-warmgray-600` ✅ PHASE 1 DONE
+- [x] Loading state: LoadingMoreItems component (shimmer + pulse dots) ✅ PHASE 1 DONE
+- [x] Debounce: Use useDebounce hook dengan 500ms ✅ PHASE 1 DONE
+- [ ] Empty state: centered text dengan FileText icon (dari PelangganView pattern) - Phase 2
+- [ ] Skeleton loading: animate-pulse rows (dari PelangganView) - Phase 2
+- [ ] Toolbar: [+Add] [🔄Refresh] | [Export] [Print] [Search] [Count] - Phase 2
+- [ ] Row click: TabContext integration untuk edit/view - Phase 2
+
+**Layout & Spacing:**
+- [ ] Toolbar: `px-4 py-2 bg-surface-50 border-b border-surface-200 flex-none` - Phase 2
+- [ ] Table padding: `px-4 py-2` (not `px-4 py-3`) untuk cells - Phase 2
+- [ ] Button group: `border border-surface-300 rounded` dengan `border-r` dividers - Phase 2
+- [ ] Spacing consistency: `gap-1` (compact buttons), `gap-2` (sections) - Phase 2
+
+**Advanced Features (Phase 3+):**
+- [ ] Infinite Scroll: useInfiniteScroll hook dengan IntersectionObserver (bukan react-infinite-scroll-component)
+- [ ] Filter buttons: Status, Kategori, Warehouse (dari PelangganView pattern)
+- [ ] Advanced filter modal: Optional feature
+- [ ] Expandable rows: Product details expansion
+- [ ] Status badges dengan color indicators
+
+**Accessibility & Polish:**
+- [ ] Keyboard navigation (Phase 4)
+- [ ] ARIA labels untuk buttons
+- [ ] Focus states consistency
+- [ ] Mobile responsive adjustments
 
 ---
 
@@ -783,17 +968,40 @@ Saat implementasi, pastikan:
 
 ## 🎯 NEXT STEPS
 
-1. **✅ LoadingMoreItems Component** - CREATED
-2. **Review Visualization** - User approval
-3. **Phase 1 Implementation** - Start dengan quick wins
-4. **Component Extraction** - Move to Phase 2 architecture
-5. **Feature Implementation** - Add advanced filters & pagination
-6. **Testing & Deployment** - QA & deploy to staging
+**Phase 1 Status: ✅ 80% COMPLETE**
+1. ✅ LoadingMoreItems Component - CREATED
+2. ✅ Replace hardcoded colors - DONE
+3. ✅ Fix debounce logic - DONE
+4. ✅ Add numbering column - DONE
+5. ✅ Update table styling - DONE
+6. ✅ Revise documentation untuk Daftar pattern - DONE
+7. ⏳ Apply Phase 1 changes ke page.tsx (implement toolbar + table refactor)
 
-**Status**: ✅ Dokumentasi Lengkap + LoadingMoreItems Component - Ready untuk Implementasi
+**Recommended Action for Phase 1 Completion:**
+- Apply latest Daftar pattern styling ke `frontend/app/dashboard/inventory/items-per-warehouse/page.tsx`
+- Test table rendering dengan new header `bg-warmgray-800`, zebra striping, toolbar layout
+- Verify data fetching dan debounced search works correctly
+
+**Phase 2 Readiness (After Phase 1):**
+- Extract `ItemsPerWarehouseView.tsx` (main component)
+- Extract `ListView` sub-component dengan full Daftar pattern
+- Implement TabContext integration untuk row click
+- Add skeleton loading states
+
+**Pattern References Used:**
+- ✅ PelangganView.tsx - Main architecture & data fetching pattern
+- ✅ LoadingMoreItems.tsx - Custom loader component
+- ✅ Design System Reference - Color palette & spacing
 
 ---
 
-**Last Updated**: 13/12/2025
+**Documentation Status**: ✅ FULLY REVISED
+- Header & toolbar pattern updated (Daftar, not Faktur)
+- Table structure aligned dengan PelangganView
+- Data fetching pattern clarified (useCallback + useEffect, not infinite scroll in Phase 1)
+- Phase roadmap realistic dengan component extraction details
+- Checklist comprehensive dengan phase attribution
+
+**Last Updated**: 13/12/2025 (Daftar Pattern Revision Complete)
 **Prepared by**: Claude Code
 **For**: ERP ADI Development Team

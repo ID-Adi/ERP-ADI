@@ -70,10 +70,17 @@ export class SalesReceiptService {
             });
             const fakturMap = new Map(fakturs.map(f => [f.id, f]));
 
-            // Verify all fakturs exist
+            // Verify all fakturs exist and check for overpayment
             for (const line of data.lines) {
-                if (!fakturMap.has(line.fakturId)) {
+                const faktur = fakturMap.get(line.fakturId);
+                if (!faktur) {
                     throw new Error(`Faktur not found: ${line.fakturId}`);
+                }
+
+                const currentBalance = Number(faktur.totalAmount) - Number(faktur.amountPaid);
+                // Allow small precision error (e.g. 0.01)
+                if (Number(line.amount) > currentBalance + 1) {
+                    throw new Error(`Overpayment detected for Faktur ${faktur.fakturNumber}. Remaining: ${currentBalance}, Paying: ${line.amount}`);
                 }
             }
 
@@ -219,10 +226,19 @@ export class SalesReceiptService {
             });
             const newFakturMap = new Map(newFakturs.map(f => [f.id, f]));
 
-            // Verify all fakturs exist
+            // Verify all fakturs exist and check for overpayment
             for (const line of data.lines) {
-                if (!newFakturMap.has(line.fakturId)) {
+                const faktur = newFakturMap.get(line.fakturId);
+                if (!faktur) {
                     throw new Error(`Faktur not found: ${line.fakturId}`);
+                }
+
+                // Note: The faktur state here has already been "reverted" (amountPaid reduced) 
+                // because we did the revert step earlier in this transaction.
+                // So checking against current state is correct for the new application.
+                const currentBalance = Number(faktur.totalAmount) - Number(faktur.amountPaid);
+                if (Number(line.amount) > currentBalance + 1) {
+                    throw new Error(`Overpayment detected for Faktur ${faktur.fakturNumber}. Remaining: ${currentBalance}, Paying: ${line.amount}`);
                 }
             }
 

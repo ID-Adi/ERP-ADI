@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Search, Package, Warehouse, Calendar, X } from 'lucide-react';
-import { Button, Card, Badge, PageTransition, useToast } from '@/components/ui'; // Assuming these exist
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'; // Check import path
+import { Search, Package, X, Plus, RefreshCw, Download, Printer } from 'lucide-react';
+import { Button, Card, Badge, PageTransition, useToast } from '@/components/ui';
 import Modal from '@/components/ui/Modal';
 import { formatCurrency, formatNumber } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import api from '@/lib/api';
-import { debounce } from '@/hooks/useDebounce';
+import { debounce, useDebounce } from '@/hooks/useDebounce';
 
 // --- Types ---
 interface StockItem {
@@ -40,12 +40,10 @@ const DUMMY_HISTORY = [
 
 export default function ItemsPerWarehousePage() {
     const { addToast } = useToast();
-    // Mode: 'ITEM' (Barang) or 'WAREHOUSE' (Gudang)
-    const [mode, setMode] = useState<'ITEM' | 'WAREHOUSE'>('ITEM');
 
-    // Search state
-    const [itemSearchQuery, setItemSearchQuery] = useState('');
-    const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(''); // For Warehouse filter mode
+    // Search state (Daftar Pattern)
+    const [searchInput, setSearchInput] = useState(''); // User input (immediate)
+    const searchQuery = useDebounce(searchInput, 500); // Debounced search query
 
     // Data state
     const [stocks, setStocks] = useState<StockItem[]>([]);
@@ -69,51 +67,36 @@ export default function ItemsPerWarehousePage() {
         fetchWarehouses();
     }, []);
 
-    // Fetch stocks function (without debounce)
+    // Fetch stocks function (Daftar Pattern)
     const fetchStocks = useCallback(async () => {
         setLoading(true);
         try {
-            const params: any = { limit: 50 }; // Basic limit for now
+            const params: any = { limit: 100 }; // Increased limit for better initial load
 
-            if (mode === 'ITEM' && itemSearchQuery) {
-                params.search = itemSearchQuery;
-            }
-
-            if (mode === 'WAREHOUSE' && selectedWarehouseId) {
-                params.warehouseId = selectedWarehouseId;
+            if (searchQuery) {
+                params.search = searchQuery;
             }
 
             const res = await api.get('/items/stocks', { params });
-            setStocks(res.data.data);
+            const data = res.data.data || res.data || [];
+            if (Array.isArray(data)) {
+                setStocks(data);
+            } else {
+                setStocks([]);
+            }
         } catch (error) {
             console.error('Error fetching stocks:', error);
             addToast({ type: 'error', title: 'Error', message: 'Failed to load data' });
+            setStocks([]);
         } finally {
             setLoading(false);
         }
-    }, [mode, itemSearchQuery, selectedWarehouseId, addToast]);
+    }, [searchQuery, addToast]);
 
-    // Create debounced fetch function
-    const debouncedFetchStocks = useRef(
-        debounce(() => {
-            fetchStocks();
-        }, 500)
-    ).current;
-
-    // Effect to trigger fetch when dependencies change
+    // Effect to fetch when searchQuery changes (debounce handled by useDebounce hook)
     useEffect(() => {
-        // If searching items, use debounce
-        if (mode === 'ITEM') {
-            debouncedFetchStocks();
-        } else {
-            // Immediate fetch for warehouse mode changes
-            fetchStocks();
-        }
-
-        return () => {
-            debouncedFetchStocks.cancel?.();
-        };
-    }, [itemSearchQuery, selectedWarehouseId, mode, fetchStocks, debouncedFetchStocks]);
+        fetchStocks();
+    }, [fetchStocks]);
 
 
     const handleRowClick = (stock: StockItem) => {
@@ -126,126 +109,105 @@ export default function ItemsPerWarehousePage() {
 
             <div className="flex flex-col h-[calc(100vh-6rem)] bg-white rounded-lg shadow-sm border border-warmgray-200 overflow-hidden">
 
-                {/* Toolbar */}
-                <div className="flex-none px-4 py-3 bg-warmgray-50 border-b border-warmgray-200">
-                    <div className="flex items-center gap-2 flex-wrap">
+                {/* Toolbar - Daftar Pattern */}
+                <div className="flex items-center justify-between px-4 py-2 bg-surface-50 border-b border-surface-200 flex-none">
+                    {/* LEFT: Add + Refresh buttons */}
+                    <div className="flex items-center gap-1">
+                        <button
+                            className="flex items-center justify-center w-8 h-8 bg-primary-600 hover:bg-primary-700 text-white rounded transition-colors"
+                            title="Tambah Item Baru"
+                        >
+                            <Plus className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={fetchStocks}
+                            className="flex items-center justify-center w-8 h-8 border border-surface-300 hover:bg-surface-100 text-warmgray-600 rounded transition-colors bg-white"
+                            title="Refresh Data"
+                        >
+                            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                        </button>
+                    </div>
 
-                        {/* Mode Selector (Dropdown) */}
-                        <div className="relative w-[120px]">
-                            <select
-                                value={mode}
-                                onChange={(e) => {
-                                    setMode(e.target.value as 'ITEM' | 'WAREHOUSE');
-                                    setItemSearchQuery('');
-                                    setSelectedWarehouseId('');
-                                }}
-                                className="w-full h-9 pl-3 pr-8 bg-white border border-warmgray-300 rounded text-sm font-medium text-warmgray-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 cursor-pointer hover:border-warmgray-400 transition-colors"
-                            >
-                                <option value="ITEM">Barang</option>
-                                <option value="WAREHOUSE">Gudang</option>
-                            </select>
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-warmgray-500">
-                                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
+                    {/* RIGHT: Export + Search + Count */}
+                    <div className="flex items-center gap-2">
+                        {/* Action Buttons Group (Export/Print) */}
+                        <div className="flex items-center border border-surface-300 rounded bg-white">
+                            <button className="flex items-center justify-center w-8 h-8 hover:bg-surface-100 text-warmgray-600 border-r border-surface-200 rounded-l transition-colors" title="Download">
+                                <Download className="h-4 w-4" />
+                            </button>
+                            <button className="flex items-center justify-center w-8 h-8 hover:bg-surface-100 text-warmgray-600 rounded-r transition-colors" title="Cetak">
+                                <Printer className="h-4 w-4" />
+                            </button>
                         </div>
 
-                        {/* Search Input / Warehouse Selector */}
-                        <div className="relative w-[280px]">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-warmgray-400" />
-                            {mode === 'ITEM' ? (
-                                <input
-                                    type="text"
-                                    placeholder="Cari/Pilih Barang"
-                                    value={itemSearchQuery}
-                                    onChange={(e) => setItemSearchQuery(e.target.value)}
-                                    className="w-full h-9 pl-9 pr-3 bg-white border border-warmgray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 placeholder:text-warmgray-400 transition-colors"
-                                />
-                            ) : (
-                                <select
-                                    value={selectedWarehouseId}
-                                    onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                                    className="w-full h-9 pl-9 pr-3 bg-white border border-warmgray-300 rounded text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 cursor-pointer hover:border-warmgray-400 transition-colors"
-                                >
-                                    <option value="">Cari/Pilih Gudang</option>
-                                    {warehouses.map(wh => (
-                                        <option key={wh.id} value={wh.id}>{wh.name}</option>
-                                    ))}
-                                </select>
-                            )}
-                        </div>
-
-                        {/* Date Picker */}
-                        <div className="relative w-[130px]">
+                        {/* Search Input */}
+                        <div className="flex items-center border border-surface-300 rounded overflow-hidden bg-white">
+                            <span className="px-3 py-1.5 text-sm text-warmgray-500">Cari...</span>
                             <input
                                 type="text"
-                                value="08/12/2025"
-                                readOnly
-                                className="w-full h-9 pl-3 pr-8 bg-white border border-warmgray-300 rounded text-sm text-warmgray-600 focus:outline-none cursor-default"
+                                placeholder=""
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
+                                className="w-40 px-2 py-1.5 text-sm bg-white border-l border-surface-200 focus:outline-none focus:ring-0 placeholder:text-warmgray-400"
                             />
-                            <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-warmgray-400" />
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-1 ml-auto md:ml-0">
-                            <Button
-                                variant="outline"
-                                className="h-9 w-9 p-0 flex items-center justify-center border-primary-200 text-primary-600 hover:bg-primary-50 hover:text-primary-700 hover:border-primary-300 transition-colors"
-                                title="Refresh"
-                                onClick={fetchStocks}
-                            >
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M21 21v-5h-5" /></svg>
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="h-9 w-9 p-0 flex items-center justify-center border-primary-200 text-primary-600 hover:bg-primary-50 hover:text-primary-700 hover:border-primary-300 transition-colors"
-                                title="Export"
-                            >
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                            </Button>
-                        </div>
+                        {/* Item Count */}
+                        <span className="text-sm text-warmgray-600 font-medium min-w-[50px] text-right">
+                            {stocks.length.toLocaleString()}
+                        </span>
                     </div>
                 </div>
 
                 {/* Content Area (Table) */}
                 <div className="flex-1 overflow-auto bg-white">
-                    <table className="w-full text-xs text-left border-collapse">
-                        <thead className="bg-warmgray-50 text-warmgray-600 sticky top-0 z-10 font-semibold border-b border-warmgray-200">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-white uppercase bg-warmgray-800 sticky top-0 z-10">
                             <tr>
-                                <th className="py-2 px-2 w-[30px] text-center border-r border-warmgray-200">No</th>
-                                <th className="py-2 px-4 text-left border-r border-warmgray-200">Nama Barang & Jasa</th>
-                                <th className="py-2 px-4 text-left border-r border-warmgray-200">Kode</th>
-                                <th className="py-2 px-4 text-left border-r border-warmgray-200">Gudang</th>
-                                <th className="py-2 px-3 text-center border-r border-warmgray-200 w-20">Qty</th>
-                                <th className="py-2 px-4 text-left">Satuan</th>
+                                <th className="px-4 py-2 font-medium">No</th>
+                                <th className="px-4 py-2 font-medium">Nama Barang & Jasa</th>
+                                <th className="px-4 py-2 font-medium">Kode</th>
+                                <th className="px-4 py-2 font-medium">Gudang</th>
+                                <th className="px-4 py-2 font-medium text-right">Qty</th>
+                                <th className="px-4 py-2 font-medium">Satuan</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-warmgray-100">
+                        <tbody className="divide-y divide-surface-200">
                             {loading ? (
-                                <tr><td colSpan={6} className="p-8 text-center text-warmgray-500 animate-pulse">Loading data...</td></tr>
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <tr key={i} className="animate-pulse bg-white">
+                                        <td colSpan={6} className="px-4 py-3">
+                                            <div className="h-4 bg-surface-200 rounded w-full"></div>
+                                        </td>
+                                    </tr>
+                                ))
                             ) : stocks.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="p-8 text-center text-warmgray-500">
-                                        <div className="flex flex-col items-center justify-center gap-2">
-                                            <Package className="h-8 w-8 text-warmgray-300" />
-                                            <p>Belum ada data barang</p>
+                                    <td colSpan={6} className="px-4 py-12 text-center text-warmgray-500">
+                                        <div className="flex flex-col items-center justify-center">
+                                            <Package className="h-12 w-12 text-warmgray-300 mb-3" />
+                                            <p>Tidak ada data barang</p>
                                         </div>
                                     </td>
                                 </tr>
                             ) : (
-                                stocks.map((stock, idx) => (
+                                stocks.map((stock, index) => (
                                     <tr
                                         key={stock.id}
                                         onClick={() => handleRowClick(stock)}
-                                        className={`hover:bg-primary-50 cursor-pointer transition-colors group ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafafb]'}`}
+                                        className={cn(
+                                            "hover:bg-primary-50 transition-colors cursor-pointer group",
+                                            index % 2 === 0 ? 'bg-white' : 'bg-surface-50/50'
+                                        )}
                                     >
-                                        <td className="py-1.5 px-2 text-center border-r border-warmgray-100 font-semibold text-warmgray-600">{idx + 1}</td>
-                                        <td className="py-1.5 px-3 text-warmgray-900 font-medium border-r border-warmgray-100">{stock.itemName}</td>
-                                        <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{stock.itemCode}</td>
-                                        <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{stock.warehouseName}</td>
-                                        <td className="py-1.5 px-3 text-warmgray-900 font-bold text-center border-r border-warmgray-100">{formatNumber(stock.currentStock)}</td>
-                                        <td className="py-1.5 px-3 text-warmgray-600">{stock.uom}</td>
+                                        <td className="px-4 py-2 font-semibold text-warmgray-600 text-center">
+                                            {index + 1}
+                                        </td>
+                                        <td className="px-4 py-2 font-medium text-warmgray-900">{stock.itemName}</td>
+                                        <td className="px-4 py-2 text-warmgray-600">{stock.itemCode}</td>
+                                        <td className="px-4 py-2 text-warmgray-600">{stock.warehouseName}</td>
+                                        <td className="px-4 py-2 text-right text-warmgray-600">{formatNumber(stock.currentStock)}</td>
+                                        <td className="px-4 py-2 text-warmgray-600">{stock.uom}</td>
                                     </tr>
                                 ))
                             )}

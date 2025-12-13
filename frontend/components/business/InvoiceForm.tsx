@@ -631,100 +631,94 @@ export default function InvoiceForm({
       {/* 2. Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* Top Info Bar (Fixed) - Only visible in Rincian Barang */}
-        {activeView === 'items' && (
-          <div className="bg-white border-b border-warmgray-200 px-6 py-4 flex-shrink-0 relative z-30">
-            <div className="flex items-center gap-2 mb-4">
-              <FileText className="h-5 w-5 text-[#d95d39]" />
-              <h2 className="text-[#d95d39] font-bold text-lg">Informasi Faktur</h2>
+        {/* Top Info Bar (Fixed) - Always visible */}
+        <div className="bg-white border-b border-warmgray-200 px-6 py-4 flex-shrink-0 relative z-30">
+
+          <div className="flex flex-wrap gap-6 items-start">
+            {/* Left Group */}
+            {/* Customer */}
+            <div className="w-full max-w-[400px]">
+              <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Pelanggan <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <CustomerSelect
+                  value={formData.vendorCode}
+                  onChange={handleCustomerSelect}
+                  customers={mappedCustomers}
+                />
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-6 items-start">
-              {/* Left Group */}
-              {/* Customer */}
-              <div className="w-full max-w-[400px]">
-                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Pelanggan <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <CustomerSelect
-                    value={formData.vendorCode}
-                    onChange={handleCustomerSelect}
-                    customers={mappedCustomers}
-                  />
-                </div>
+            {/* Payment Terms */}
+            <div className="w-full max-w-[200px]">
+              <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Syarat Pembayaran <span className="text-red-500">*</span></label>
+              <div className="relative h-[38px] min-h-[38px] max-h-[38px]">
+                <PaymentTermSelect
+                  value={formData.paymentTerms}
+                  onChange={handlePaymentTermChange}
+                  terms={paymentTermsList}
+                  className="h-full"
+                />
               </div>
+            </div>
 
-              {/* Payment Terms */}
-              <div className="w-full max-w-[200px]">
-                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Syarat Pembayaran <span className="text-red-500">*</span></label>
-                <div className="relative h-[38px] min-h-[38px] max-h-[38px]">
-                  <PaymentTermSelect
-                    value={formData.paymentTerms}
-                    onChange={handlePaymentTermChange}
-                    terms={paymentTermsList}
-                    className="h-full"
-                  />
-                </div>
+            {/* Date */}
+            {/* Date */}
+            <div className="w-full max-w-[170px]">
+              <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Tanggal Faktur</label>
+              <div className="relative h-[38px] min-h-[38px] max-h-[38px]">
+                <DatePicker
+                  value={formData.fakturDate}
+                  onChange={(e) => handleDateChange({ target: { name: 'fakturDate', value: e.target.value } } as any)}
+                  className="w-full h-full"
+                />
               </div>
+            </div>
 
-              {/* Date */}
-              {/* Date */}
-              <div className="w-full max-w-[170px]">
-                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Tanggal Faktur</label>
-                <div className="relative h-[38px] min-h-[38px] max-h-[38px]">
-                  <DatePicker
-                    value={formData.fakturDate}
-                    onChange={(e) => handleDateChange({ target: { name: 'fakturDate', value: e.target.value } } as any)}
-                    className="w-full h-full"
-                  />
-                </div>
-              </div>
+            {/* Invoice Number (Right) */}
+            <div className="w-full max-w-[265px]">
+              <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">No. Faktur</label>
 
-              {/* Invoice Number (Right) */}
-              <div className="w-full max-w-[265px]">
-                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">No. Faktur</label>
-
-                <div className="flex gap-2 items-center h-[38px] min-h-[38px] max-h-[38px]">
-                  {/* Toggle Switch (Only visible for NEW invoices) */}
-                  {!initialData.id && (
-                    <div
-                      className="flex items-center justify-center h-full px-2 cursor-pointer group rounded border border-transparent hover:bg-warmgray-50 transition-colors"
-                      onClick={handleManualFakturToggle}
-                      title={isManualFaktur ? "Mode Manual Aktif" : "Mode Auto-Generated"}
-                    >
+              <div className="flex gap-2 items-center h-[38px] min-h-[38px] max-h-[38px]">
+                {/* Toggle Switch (Only visible for NEW invoices) */}
+                {!initialData.id && (
+                  <div
+                    className="flex items-center justify-center h-full px-2 cursor-pointer group rounded border border-transparent hover:bg-warmgray-50 transition-colors"
+                    onClick={handleManualFakturToggle}
+                    title={isManualFaktur ? "Mode Manual Aktif" : "Mode Auto-Generated"}
+                  >
+                    <div className={cn(
+                      "w-9 h-5 rounded-full relative transition-colors duration-200 ease-in-out flex-shrink-0",
+                      isManualFaktur ? "bg-primary-500" : "bg-warmgray-300 group-hover:bg-warmgray-400"
+                    )}>
                       <div className={cn(
-                        "w-9 h-5 rounded-full relative transition-colors duration-200 ease-in-out flex-shrink-0",
-                        isManualFaktur ? "bg-primary-500" : "bg-warmgray-300 group-hover:bg-warmgray-400"
-                      )}>
-                        <div className={cn(
-                          "absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-sm",
-                          isManualFaktur ? "translate-x-4.5" : "translate-x-0.5"
-                        )} style={{ transform: isManualFaktur ? 'translateX(18px)' : 'translateX(2px)' }} />
-                      </div>
+                        "absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-sm",
+                        isManualFaktur ? "translate-x-4.5" : "translate-x-0.5"
+                      )} style={{ transform: isManualFaktur ? 'translateX(18px)' : 'translateX(2px)' }} />
                     </div>
-                  )}
-
-                  <div className="relative flex-1 h-full">
-                    <input
-                      type="text"
-                      value={formData.fakturNumber}
-                      readOnly={!isManualFaktur}
-                      onChange={(e) => handleFormChange('fakturNumber', e.target.value)}
-                      placeholder={isManualFaktur ? "No. Faktur" : "Auto"}
-                      className={cn(
-                        "w-full pl-9 pr-3 h-full border rounded text-sm font-medium transition-all focus:outline-none",
-                        isManualFaktur
-                          ? "bg-white border-warmgray-300 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-warmgray-900"
-                          : "bg-warmgray-100 border-warmgray-200 text-warmgray-500 cursor-not-allowed select-none"
-                      )}
-                    />
-                    <Hash className="absolute left-2.5 top-2.5 h-4 w-4 text-warmgray-400 pointer-events-none" />
                   </div>
+                )}
+
+                <div className="relative flex-1 h-full">
+                  <input
+                    type="text"
+                    value={formData.fakturNumber}
+                    readOnly={!isManualFaktur}
+                    onChange={(e) => handleFormChange('fakturNumber', e.target.value)}
+                    placeholder={isManualFaktur ? "No. Faktur" : "Auto"}
+                    className={cn(
+                      "w-full pl-9 pr-3 h-full border rounded text-sm font-medium transition-all focus:outline-none",
+                      isManualFaktur
+                        ? "bg-white border-warmgray-300 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-warmgray-900"
+                        : "bg-warmgray-100 border-warmgray-200 text-warmgray-500 cursor-not-allowed select-none"
+                    )}
+                  />
+                  <Hash className="absolute left-2.5 top-2.5 h-4 w-4 text-warmgray-400 pointer-events-none" />
                 </div>
               </div>
-
             </div>
+
           </div>
-        )}
+        </div>
 
         {/* View Content Area */}
         <div className="flex-1 overflow-hidden p-6 relative bg-[#f0f2f5]">
