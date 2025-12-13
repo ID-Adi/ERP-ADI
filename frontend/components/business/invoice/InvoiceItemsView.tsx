@@ -351,8 +351,8 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                 <table className="w-full text-xs z-10 relative">
                     <thead className="bg-warmgray-50 sticky top-0 z-20 border-b border-warmgray-200">
                         <tr>
-                            <th className="py-2 px-2 w-[30px] text-center font-semibold text-warmgray-600 border-r border-warmgray-200"></th>
-                            <th className="py-2 px-4 w-[250px] text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Barang</th>
+                            <th className="py-2 px-2 w-[30px] text-center font-semibold text-warmgray-600 border-r border-warmgray-200">No</th>
+                            <th className="py-2 px-4 w-[250px] text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Barang & Jasa</th>
                             <th className="py-2 px-4 w-[200px] text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Catatan</th>
                             <th className="py-2 px-4 text-left font-semibold text-warmgray-600 border-r border-warmgray-200">Kode</th>
                             <th className="py-2 px-2 w-[70px] text-center font-semibold text-warmgray-600 border-r border-warmgray-200">Kuantitas</th>
@@ -384,7 +384,7 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                                     className="odd:bg-white even:bg-[#fafafb] hover:bg-primary-50 cursor-pointer transition-colors group"
                                     onClick={() => handleEditItem(item)}
                                 >
-                                    <td className="py-1.5 px-2 text-center text-warmgray-400 border-r border-warmgray-100">=</td>
+                                    <td className="py-1.5 px-2 text-center font-semibold text-warmgray-600 border-r border-warmgray-100">{index + 1}</td>
                                     <td className="py-1.5 px-3 font-medium text-warmgray-900 border-r border-warmgray-100">{item.description}</td>
                                     <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100 italic">{item.notes || '-'}</td>
                                     <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{item.itemCode}</td>

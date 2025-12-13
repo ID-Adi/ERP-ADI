@@ -71,8 +71,8 @@ export default function InvoiceInfoView({ formData, onChange, onPaymentTermChang
                             <textarea
                                 rows={4}
                                 className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 resize-none font-mono"
-                                value={formData.billingAddress || ''}
-                                onChange={(e) => onChange('billingAddress', e.target.value)}
+                                value={formData.address || ''}
+                                onChange={(e) => onChange('address', e.target.value)}
                                 placeholder="Alamat penagihan..."
                             />
                         </div>

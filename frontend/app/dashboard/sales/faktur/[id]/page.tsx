@@ -114,7 +114,16 @@ export default function EditInvoicePage() {
       ...cachedData,
       // Ensure critical fields are populated from fresh API data if missing in cache
       paymentTerms: cachedData.paymentTerms || invoiceData?.paymentTerms || '',
-      paymentTermId: cachedData.paymentTermId || invoiceData?.paymentTermId || ''
+      paymentTermId: cachedData.paymentTermId || invoiceData?.paymentTermId || '',
+      // Fix: Backfill new/critical fields
+      address: cachedData.address || invoiceData?.address || '',
+      totalCost: cachedData.totalCost ?? invoiceData?.totalCost ?? 0,
+      taxInclusive: typeof cachedData.taxInclusive === 'boolean'
+        ? cachedData.taxInclusive
+        : (typeof invoiceData?.taxInclusive === 'boolean' ? invoiceData.taxInclusive : true),
+      // Backfill costs if cache is empty but DB has line items (approximate check)
+      // Actually better to just use cache if it exists, but maybe force populate if cache.costs is undefined
+      costs: ((cachedData as any).costs && (cachedData as any).costs.length > 0) ? (cachedData as any).costs : (invoiceData?.costs || [])
     }
     : invoiceData;
 

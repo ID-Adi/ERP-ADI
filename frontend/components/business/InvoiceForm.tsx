@@ -148,7 +148,12 @@ export default function InvoiceForm({
           paymentTermApi.getAll()
         ]);
         setCustomers(customersResponse.data.data || []);
-        setPaymentTermsList(paymentTermsResponse);
+
+        // Handle potential response structure differences (Array vs { data: Array })
+        const termsData = Array.isArray(paymentTermsResponse)
+          ? paymentTermsResponse
+          : ((paymentTermsResponse as any).data || []);
+        setPaymentTermsList(termsData);
       } catch (error) {
         console.error('Failed to fetch data:', error);
       }
@@ -202,6 +207,13 @@ export default function InvoiceForm({
     otherCostsTotal: 0,
     grandTotal: 0,
   });
+
+  // Sync otherCosts with initialData if it changes (e.g. from loading state or cache backfill)
+  useEffect(() => {
+    if ((initialData as any).costs && (initialData as any).costs.length > 0) {
+      setOtherCosts((initialData as any).costs);
+    }
+  }, [initialData]);
 
   // --- Effects ---
   useEffect(() => {

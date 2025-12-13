@@ -1,0 +1,427 @@
+# MCP Toolbox Configuration for ERP-ADI Project
+# Database configuration and tools definition for Claude integration
+
+# Data Sources
+sources:
+- name: erp_adi_db
+  kind: postgres
+  host: localhost
+  port: 5433
+  database: erp_adi
+  user: postgres
+  password: anandakeren
+  description: ERP ADI PostgreSQL Database
+
+# Tools Definition
+tools:
+  # Company Management Tools
+  - name: get_companies
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT id, code, name, email, phone, website, address, isActive, createdAt
+      FROM "Company"
+      ORDER BY createdAt DESC
+    description: Retrieve all companies with basic information
+
+  - name: get_company_by_id
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT * FROM "Company" WHERE id = :company_id
+    description: Get detailed information for a specific company
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  # Customer Management Tools
+  - name: list_customers
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT id, code, name, email, phone, category, creditLimit, isActive
+      FROM "customer"
+      WHERE "companyId" = :company_id AND isActive = true
+      ORDER BY name
+    description: List all active customers for a company
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  - name: get_customer_sales
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT f.fakturNumber, f.fakturDate, f.totalAmount, f.status, f.balanceDue
+      FROM "Faktur" f
+      WHERE f."customerId" = :customer_id
+      ORDER BY f.fakturDate DESC
+      LIMIT 20
+    description: Get recent sales invoices for a customer
+    parameters:
+      - name: customer_id
+        type: string
+        required: true
+
+  # Sales/Invoice Tools
+  - name: list_fakturs
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT f.id, f.fakturNumber, f.fakturDate, c.name as customer_name,
+             f.totalAmount, f.amountPaid, f.balanceDue, f.status
+      FROM "Faktur" f
+      LEFT JOIN "customer" c ON f."customerId" = c.id
+      WHERE f."companyId" = :company_id
+      ORDER BY f.fakturDate DESC
+      LIMIT 50
+    description: List recent invoices with customer information
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  - name: get_faktur_details
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT f.*,
+             json_agg(json_build_object(
+               'description', fl.description,
+               'quantity', fl.quantity,
+               'unitPrice', fl."unitPrice",
+               'discountPercent', fl."discountPercent",
+               'amount', fl.amount
+             )) as lines
+      FROM "Faktur" f
+      LEFT JOIN "FakturLine" fl ON f.id = fl."fakturId"
+      WHERE f.id = :faktur_id
+      GROUP BY f.id
+    description: Get detailed invoice information with line items
+    parameters:
+      - name: faktur_id
+        type: string
+        required: true
+
+  - name: get_faktur_costs
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT fc.id, fc.amount, a.name as account_name, fc.notes
+      FROM "FakturCost" fc
+      LEFT JOIN "Account" a ON fc."accountId" = a.id
+      WHERE fc."fakturId" = :faktur_id
+      ORDER BY fc.createdAt
+    description: Get additional costs for an invoice
+    parameters:
+      - name: faktur_id
+        type: string
+        required: true
+
+  # Inventory Tools
+  - name: list_items
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT i.id, i.code, i.name, i.barcode, i.uom, i.brand,
+             c.name as category, i.isStockItem, i.isActive
+      FROM "Item" i
+      LEFT JOIN "ItemCategory" c ON i."categoryId" = c.id
+      WHERE i."companyId" = :company_id AND i.isActive = true
+      ORDER BY i.name
+    description: List all active items/products
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  - name: get_item_stock
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT w.name as warehouse, s.currentStock, s.availableStock,
+             s.reservedStock, s.minStock, s.maxStock, s.reorderPoint
+      FROM "ItemStock" s
+      JOIN "Warehouse" w ON s."warehouseId" = w.id
+      WHERE s."itemId" = :item_id
+      ORDER BY w.name
+    description: Get stock levels for an item across warehouses
+    parameters:
+      - name: item_id
+        type: string
+        required: true
+
+  - name: get_item_pricing
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT "priceType", price, "defaultDiscount", "minimumQuantity",
+             "effectiveFrom", "effectiveTo", isActive
+      FROM "ItemPricing"
+      WHERE "itemId" = :item_id AND isActive = true
+      ORDER BY "priceType"
+    description: Get pricing information for an item
+    parameters:
+      - name: item_id
+        type: string
+        required: true
+
+  # Warehouse Tools
+  - name: list_warehouses
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT id, code, name, address, city, isActive
+      FROM "Warehouse"
+      WHERE "companyId" = :company_id AND isActive = true
+      ORDER BY name
+    description: List all active warehouses
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  # Inventory Transactions
+  - name: get_inventory_transactions
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT i.id, i."transactionDate", i."transactionType", i."referenceNo",
+             it.name as item_name, i.quantity, i.unit, i."costPerUnit", i."totalCost",
+             w.name as warehouse, i.notes
+      FROM "InventoryTransaction" i
+      JOIN "Item" it ON i."itemId" = it.id
+      JOIN "Warehouse" w ON i."warehouseId" = w.id
+      WHERE i."companyId" = :company_id
+      ORDER BY i."transactionDate" DESC
+      LIMIT 50
+    description: Get recent inventory transactions
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  # Sales Order Tools
+  - name: list_sales_orders
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT o.id, o."orderNumber", o."orderDate", c.name as customer_name,
+             o.status, o.totalAmount, o."createdAt"
+      FROM "SalesOrder" o
+      LEFT JOIN "customer" c ON o."customerId" = c.id
+      WHERE o."companyId" = :company_id
+      ORDER BY o."orderDate" DESC
+      LIMIT 50
+    description: List sales orders
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  # Accounting/Journal Tools
+  - name: list_accounts
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT id, code, name, type, "isHeader", "isActive"
+      FROM "Account"
+      WHERE "companyId" = :company_id AND "isActive" = true
+      ORDER BY code
+    description: List chart of accounts
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  - name: get_account_balance
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT "openingBalance", "totalDebit", "totalCredit", "closingBalance", period
+      FROM "AccountBalance"
+      WHERE "accountId" = :account_id
+      ORDER BY period DESC
+      LIMIT 12
+    description: Get account balance history
+    parameters:
+      - name: account_id
+        type: string
+        required: true
+
+  - name: get_journal_entries
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT j.id, j."transactionDate", j."transactionNo", j.description,
+             j."sourceType", j."sourceId"
+      FROM "JournalEntry" j
+      WHERE j."companyId" = :company_id
+      ORDER BY j."transactionDate" DESC
+      LIMIT 50
+    description: List journal entries
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  # Sales Receipt Tools
+  - name: list_sales_receipts
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT r.id, r."receiptNumber", r."receiptDate", c.name as customer_name,
+             r.amount, r."paymentMethod", r.status
+      FROM "SalesReceipt" r
+      LEFT JOIN "customer" c ON r."customerId" = c.id
+      WHERE r."companyId" = :company_id
+      ORDER BY r."receiptDate" DESC
+      LIMIT 50
+    description: List sales receipts
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  # Payment Terms Tools
+  - name: list_payment_terms
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT id, code, name, days, isActive
+      FROM "PaymentTerm"
+      WHERE "companyId" = :company_id AND isActive = true
+      ORDER BY name
+    description: List payment terms
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  # Employee/Salesperson Tools
+  - name: list_salespersons
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT s.id, s.code, s.name, s.email, s.phone, s.isActive
+      FROM "Salesperson" s
+      WHERE s."companyId" = :company_id AND s.isActive = true
+      ORDER BY s.name
+    description: List active salespersons
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  # Summary/Reporting Tools
+  - name: get_sales_summary
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT
+        DATE_TRUNC('month', f."fakturDate") as month,
+        COUNT(*) as invoice_count,
+        SUM(f.totalAmount) as total_sales,
+        SUM(f."amountPaid") as total_paid,
+        SUM(f."balanceDue") as total_outstanding
+      FROM "Faktur" f
+      WHERE f."companyId" = :company_id
+        AND f."fakturDate" >= NOW() - INTERVAL '12 months'
+      GROUP BY DATE_TRUNC('month', f."fakturDate")
+      ORDER BY month DESC
+    description: Get monthly sales summary for the last 12 months
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+  - name: get_overdue_invoices
+    source: erp_adi_db
+    type: query
+    sql: |
+      SELECT f.id, f."fakturNumber", f."fakturDate", c.name as customer_name,
+             f.totalAmount, f."balanceDue",
+             CAST(NOW() - f."dueDate" AS INT) as days_overdue
+      FROM "Faktur" f
+      LEFT JOIN "customer" c ON f."customerId" = c.id
+      WHERE f."companyId" = :company_id
+        AND f.status IN ('UNPAID', 'PARTIAL', 'OVERDUE')
+        AND f."dueDate" < NOW()
+      ORDER BY f."dueDate"
+    description: Get overdue invoices
+    parameters:
+      - name: company_id
+        type: string
+        required: true
+
+# Toolsets - Group tools for specific use cases
+toolsets:
+  sales_operations:
+    name: Sales Operations
+    description: Tools for managing sales orders, invoices, and customer interactions
+    tools:
+      - list_customers
+      - list_fakturs
+      - get_faktur_details
+      - list_sales_orders
+      - get_overdue_invoices
+
+  inventory_management:
+    name: Inventory Management
+    description: Tools for managing inventory, stock levels, and warehouses
+    tools:
+      - list_items
+      - get_item_stock
+      - get_inventory_transactions
+      - list_warehouses
+
+  financial_accounting:
+    name: Financial Accounting
+    description: Tools for accounting, journal entries, and account management
+    tools:
+      - list_accounts
+      - get_account_balance
+      - get_journal_entries
+      - get_sales_summary
+
+  customer_management:
+    name: Customer Management
+    description: Tools for customer-related queries and analysis
+    tools:
+      - list_customers
+      - get_customer_sales
+      - list_salespersons
+
+# Prompts for specific tasks
+prompts:
+  sales_analysis:
+    name: Sales Analysis
+    description: Analyze sales performance and trends
+    system: |
+      You are a sales analyst for the ERP-ADI system. Use the available sales tools to provide insights on:
+      - Sales trends and patterns
+      - Customer behavior and purchasing history
+      - Outstanding invoices and receivables
+      - Salesperson performance
+
+  inventory_analysis:
+    name: Inventory Analysis
+    description: Analyze inventory levels and movements
+    system: |
+      You are an inventory analyst for the ERP-ADI system. Use the available inventory tools to:
+      - Monitor stock levels across warehouses
+      - Identify slow-moving items
+      - Track inventory transactions
+      - Assess warehouse capacity and distribution
+
+  financial_reporting:
+    name: Financial Reporting
+    description: Generate financial reports and analysis
+    system: |
+      You are a financial analyst for the ERP-ADI system. Use the available accounting tools to:
+      - Analyze account balances and trends
+      - Review journal entries and transactions
+      - Generate financial summaries
+      - Identify discrepancies or anomalies
