@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
+import { WarehouseService } from '../../domain/masters/warehouse.service';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient(); // Keep prisma for company check temporarily if needed, though service should handle it.
 const router = Router();
+const warehouseService = new WarehouseService();
 
 // GET /api/warehouses
 router.get('/', async (req: Request, res: Response) => {
@@ -12,52 +14,45 @@ router.get('/', async (req: Request, res: Response) => {
         const search = req.query.search as string;
         const itemId = req.query.itemId as string;
 
-        const skip = (page - 1) * limit;
+        // Assuming single tenant for now or getting companyId from somewhere?
+        // The original code did: const defaultCompany = await prisma.company.findFirst();
+        // But the GET didn't use companyId explicitly in the original code?
+        // Wait, original GET logic: const total = await prisma.warehouse.count({ where });
+        // It didn't filter by companyId explicitly in original code?
+        // Original code: const where: any = { isActive: true };
 
-        const where: any = { isActive: true };
+        // However, the `create` logic fetched `defaultCompany`.
+        // To be safe and consistent with refactor, let's fetch default company or handle it.
+        // Ideally `req.user.companyId` but there is no auth middleware visible here.
+        // I will stick to "findFirst" company strategy if context is missing, or query all if original did so.
 
-        if (search) {
-            where.OR = [
-                { name: { contains: search, mode: 'insensitive' } },
-                { code: { contains: search, mode: 'insensitive' } },
-                { city: { contains: search, mode: 'insensitive' } }
-            ];
+        // Original GET query:
+        // const where: any = { isActive: true };
+        // if (search) ...
+
+        // It seems original code was loosely typed regarding tenancy in GET.
+        // But for `create` it enforced company.
+        // Let's get a companyId to pass to the service, or make service method flexible?
+        // Service methods `findAllByCompany` require companyId.
+
+        // Let's look for a company first.
+        const defaultCompany = await prisma.company.findFirst();
+        if (!defaultCompany) {
+             // Fallback or error? Original GET didn't fail if no company, just returned empty list effectively if no warehouses?
+             // Actually original GET returned all warehouses regardless of company.
+             // But my Service is designed for Multi-tenancy (companyId).
+             // Given the schema has `companyId`, I should probably use the default company ID.
+             return res.json({ data: [], meta: { total: 0, page, limit, last_page: 0 } });
         }
 
-        const total = await prisma.warehouse.count({ where });
-
-        // If itemId is provided, include stock info
-        const include = itemId ? {
-            stocks: {
-                where: { itemId },
-                select: { availableStock: true }
-            }
-        } : undefined;
-
-        const warehouses = await prisma.warehouse.findMany({
-            where,
-            include,
-            skip,
-            take: limit,
-            orderBy: { name: 'asc' }
+        const result = await warehouseService.getCompanyWarehouses(defaultCompany.id, {
+            page,
+            limit,
+            search,
+            itemId
         });
 
-        // Map response to include stock directly if itemId was requested
-        const data = warehouses.map(wh => {
-            const stock = (wh as any).stocks?.[0]?.availableStock ?? 0;
-            const { stocks, ...rest } = wh as any;
-            return itemId ? { ...rest, stock } : rest;
-        });
-
-        res.json({
-            data,
-            meta: {
-                total,
-                page,
-                limit,
-                last_page: Math.ceil(total / limit)
-            }
-        });
+        res.json(result);
     } catch (error) {
         console.error('Error fetching warehouses:', error);
         res.status(500).json({ error: 'Failed to fetch warehouses' });
@@ -68,7 +63,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const warehouse = await prisma.warehouse.findUnique({ where: { id } });
+        const warehouse = await warehouseService.getById(id);
 
         if (!warehouse) {
             return res.status(404).json({ error: 'Warehouse not found' });
@@ -84,46 +79,21 @@ router.get('/:id', async (req: Request, res: Response) => {
 // POST /api/warehouses
 router.post('/', async (req: Request, res: Response) => {
     try {
-        const { name, code, address, city, isActive } = req.body;
-
-        if (!name) {
-            return res.status(400).json({ error: 'Nama Gudang wajib diisi' });
-        }
-        if (!code) {
-            return res.status(400).json({ error: 'Kode Gudang wajib diisi' });
-        }
-
         const defaultCompany = await prisma.company.findFirst();
         if (!defaultCompany) {
             return res.status(500).json({ error: 'No company found' });
         }
 
-        // Check for duplicates (code)
-        const existingWarehouse = await prisma.warehouse.findFirst({
-            where: {
-                companyId: defaultCompany.id,
-                code: { equals: code, mode: 'insensitive' }
-            }
-        });
-
-        if (existingWarehouse) {
-            return res.status(400).json({ error: 'Gudang dengan kode tersebut sudah ada' });
-        }
-
-        const warehouse = await prisma.warehouse.create({
-            data: {
-                companyId: defaultCompany.id,
-                name,
-                code,
-                address,
-                city,
-                isActive: isActive ?? true
-            }
-        });
-
+        const warehouse = await warehouseService.createWarehouse(defaultCompany.id, req.body);
         res.status(201).json({ data: warehouse, message: 'Gudang berhasil dibuat' });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error creating warehouse:', error);
+        // Handle specific service errors
+        if (error.message === 'Nama Gudang wajib diisi' ||
+            error.message === 'Kode Gudang wajib diisi' ||
+            error.message === 'Gudang dengan kode tersebut sudah ada') {
+            return res.status(400).json({ error: error.message });
+        }
         res.status(500).json({ error: 'Gagal membuat gudang' });
     }
 });
@@ -132,27 +102,24 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, code, address, city, isActive } = req.body;
-
-        const warehouse = await prisma.warehouse.findUnique({ where: { id } });
-        if (!warehouse) {
-            return res.status(404).json({ error: 'Warehouse not found' });
+        const defaultCompany = await prisma.company.findFirst();
+        if (!defaultCompany) {
+            return res.status(500).json({ error: 'No company found' });
         }
 
-        const updatedWarehouse = await prisma.warehouse.update({
-            where: { id },
-            data: {
-                name,
-                code,
-                address,
-                city,
-                isActive
-            }
-        });
+        // We need to ensure the warehouse belongs to the company, service update checks this usually?
+        // My service update checks: if (!warehouse || warehouse.companyId !== companyId)
 
+        const updatedWarehouse = await warehouseService.updateWarehouse(id, defaultCompany.id, req.body);
         res.json({ data: updatedWarehouse, message: 'Gudang berhasil diupdate' });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error updating warehouse:', error);
+        if (error.message === 'Warehouse not found or access denied') {
+             return res.status(404).json({ error: 'Warehouse not found' });
+        }
+        if (error.message === 'Gudang dengan kode tersebut sudah ada') {
+             return res.status(400).json({ error: error.message });
+        }
         res.status(500).json({ error: 'Gagal mengupdate gudang' });
     }
 });
@@ -162,12 +129,14 @@ router.delete('/:id', async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
 
-        // TODO: Check for dependencies (stocks, etc) before deleting
-
-        await prisma.warehouse.delete({ where: { id } });
+        await warehouseService.deleteWarehouse(id);
         res.json({ message: 'Gudang berhasil dihapus' });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error deleting warehouse:', error);
+        if (error.message === 'Gudang tidak dapat dihapus karena masih memiliki stok atau riwayat transaksi.') {
+            return res.status(400).json({ error: error.message });
+        }
+        // Also handle not found if strict
         res.status(500).json({ error: 'Gagal menghapus gudang' });
     }
 });
