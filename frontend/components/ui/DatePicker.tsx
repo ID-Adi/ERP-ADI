@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -41,8 +41,8 @@ export default function DatePicker({ value, onChange, className, placeholder, di
         }
     }, [value]);
 
-    // Update coordinates when dropdown opens
-    useEffect(() => {
+    // Update coordinates when dropdown opens - useLayoutEffect to prevent flicker
+    useLayoutEffect(() => {
         if (isOpen && containerRef.current) {
             const updateCoords = () => {
                 if (containerRef.current) {

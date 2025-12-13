@@ -36,6 +36,7 @@ model Company {
   users                 User[]
   warehouses            Warehouse[]
   customers             Customer[]
+  SalesReturn           SalesReturn[]
 }
 
 model User {
@@ -117,6 +118,7 @@ model Customer {
   salesAccount           Account?       @relation("CustSales", fields: [salesAccountId], references: [id])
   salesDiscountAccount   Account?       @relation("CustSalesDisc", fields: [salesDiscountAccountId], references: [id])
   salesReturnAccount     Account?       @relation("CustReturn", fields: [salesReturnAccountId], references: [id])
+  SalesReturn            SalesReturn[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -150,6 +152,7 @@ model Item {
   suppliers             ItemSupplier[]
   taxes                 ItemTax[]
   salesOrderLines       SalesOrderLine[]
+  SalesReturnLine       SalesReturnLine[]
 
   @@unique([companyId, code])
   @@index([categoryId])
@@ -292,6 +295,7 @@ model Warehouse {
   inventoryTransactions InventoryTransaction[]
   stocks                ItemStock[]
   company               Company                @relation(fields: [companyId], references: [id])
+  SalesReturnLine       SalesReturnLine[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -472,7 +476,7 @@ model Faktur {
   salespersonId   String?
   shippingDate    DateTime?
   taxInclusive    Boolean            @default(true)
-  address         String?                              // Alamat pengiriman/penagihan
+  address         String? // Alamat pengiriman/penagihan
   totalCost       Decimal            @default(0) @db.Decimal(15, 2) // Total biaya lainnya
   company         Company            @relation(fields: [companyId], references: [id])
   customer        Customer           @relation(fields: [customerId], references: [id])
@@ -500,25 +504,25 @@ model Faktur {
 }
 
 model FakturLine {
-  id              String       @id @default(uuid())
-  fakturId        String
-  itemId          String?
-  description     String?
-  quantity        Decimal      @db.Decimal(10, 2)
-  unitPrice       Decimal      @db.Decimal(15, 2)
-  discountPercent Decimal      @default(0) @db.Decimal(5, 2)
-  amount          Decimal      @db.Decimal(15, 2)
-  warehouseId     String?
-  discountAmount  Decimal      @default(0) @db.Decimal(15, 2)
-  unit            String?
-  itemName        String
-  salespersonId   String?
-  subtotalBeforeDiscount Decimal @default(0) @db.Decimal(15, 2) // unitPrice x quantity
-  customerId      String?                                        // Customer ID untuk laporan
-  faktur          Faktur       @relation(fields: [fakturId], references: [id], onDelete: Cascade)
-  item            Item?        @relation(fields: [itemId], references: [id])
-  salesperson     Salesperson? @relation(fields: [salespersonId], references: [id])
-  warehouse       Warehouse?   @relation(fields: [warehouseId], references: [id])
+  id                     String       @id @default(uuid())
+  fakturId               String
+  itemId                 String?
+  description            String?
+  quantity               Decimal      @db.Decimal(10, 2)
+  unitPrice              Decimal      @db.Decimal(15, 2)
+  discountPercent        Decimal      @default(0) @db.Decimal(5, 2)
+  amount                 Decimal      @db.Decimal(15, 2)
+  warehouseId            String?
+  discountAmount         Decimal      @default(0) @db.Decimal(15, 2)
+  unit                   String?
+  itemName               String
+  salespersonId          String?
+  subtotalBeforeDiscount Decimal      @default(0) @db.Decimal(15, 2) // unitPrice x quantity
+  customerId             String? // Customer ID untuk laporan
+  faktur                 Faktur       @relation(fields: [fakturId], references: [id], onDelete: Cascade)
+  item                   Item?        @relation(fields: [itemId], references: [id])
+  salesperson            Salesperson? @relation(fields: [salespersonId], references: [id])
+  warehouse              Warehouse?   @relation(fields: [warehouseId], references: [id])
 
   @@index([fakturId])
   @@index([itemId])
@@ -571,22 +575,22 @@ model SalesReceipt {
 }
 
 model SalesReturn {
-  id              String            @id @default(uuid())
-  companyId       String
-  returnNumber    String
-  returnDate      DateTime
-  fakturId        String
-  customerId      String
-  status          ReturnStatus      @default(DRAFT)
-  totalAmount     Decimal           @db.Decimal(15, 2)
-  notes           String?
-  createdBy       String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  company         Company           @relation(fields: [companyId], references: [id])
-  customer        Customer          @relation(fields: [customerId], references: [id])
-  faktur          Faktur            @relation(fields: [fakturId], references: [id])
-  lines           SalesReturnLine[]
+  id           String            @id @default(uuid())
+  companyId    String
+  returnNumber String
+  returnDate   DateTime
+  fakturId     String
+  customerId   String
+  status       ReturnStatus      @default(DRAFT)
+  totalAmount  Decimal           @db.Decimal(15, 2)
+  notes        String?
+  createdBy    String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  company      Company           @relation(fields: [companyId], references: [id])
+  customer     Customer          @relation(fields: [customerId], references: [id])
+  faktur       Faktur            @relation(fields: [fakturId], references: [id])
+  lines        SalesReturnLine[]
 
   @@unique([companyId, returnNumber])
   @@index([companyId])
@@ -597,17 +601,17 @@ model SalesReturn {
 }
 
 model SalesReturnLine {
-  id              String      @id @default(uuid())
-  salesReturnId   String
-  itemId          String
-  description     String?
-  quantity        Decimal     @db.Decimal(10, 2)
-  unitPrice       Decimal     @db.Decimal(15, 2)
-  amount          Decimal     @db.Decimal(15, 2)
-  warehouseId     String?
-  item            Item        @relation(fields: [itemId], references: [id])
-  salesReturn     SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
-  warehouse       Warehouse?  @relation(fields: [warehouseId], references: [id])
+  id            String      @id @default(uuid())
+  salesReturnId String
+  itemId        String
+  description   String?
+  quantity      Decimal     @db.Decimal(10, 2)
+  unitPrice     Decimal     @db.Decimal(15, 2)
+  amount        Decimal     @db.Decimal(15, 2)
+  warehouseId   String?
+  item          Item        @relation(fields: [itemId], references: [id])
+  salesReturn   SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
+  warehouse     Warehouse?  @relation(fields: [warehouseId], references: [id])
 
   @@index([salesReturnId])
   @@index([itemId])

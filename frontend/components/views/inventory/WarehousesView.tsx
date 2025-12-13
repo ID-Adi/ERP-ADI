@@ -436,7 +436,7 @@ function FormView({
                                 value={formData.city}
                                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                                 className="w-full px-3 py-2 border border-surface-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-500 text-sm"
-                                placeholder="Contoh: Jakarta Selatan"
+                                placeholder="Contoh: BANJARBARU"
                             />
                         </div>
                     </div>
