@@ -472,6 +472,8 @@ model Faktur {
   salespersonId   String?
   shippingDate    DateTime?
   taxInclusive    Boolean            @default(true)
+  address         String?                              // Alamat pengiriman/penagihan
+  totalCost       Decimal            @default(0) @db.Decimal(15, 2) // Total biaya lainnya
   company         Company            @relation(fields: [companyId], references: [id])
   customer        Customer           @relation(fields: [customerId], references: [id])
   paymentTerm     PaymentTerm?       @relation(fields: [paymentTermId], references: [id])
@@ -510,6 +512,8 @@ model FakturLine {
   unit            String?
   itemName        String
   salespersonId   String?
+  subtotalBeforeDiscount Decimal @default(0) @db.Decimal(15, 2) // unitPrice x quantity
+  customerId      String?                                        // Customer ID untuk laporan
   faktur          Faktur       @relation(fields: [fakturId], references: [id], onDelete: Cascade)
   item            Item?        @relation(fields: [itemId], references: [id])
   salesperson     Salesperson? @relation(fields: [salespersonId], references: [id])

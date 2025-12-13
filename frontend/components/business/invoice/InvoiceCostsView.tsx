@@ -189,9 +189,7 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId, 
                 <table className="w-full text-xs z-10 relative">
                     <thead className="bg-warmgray-50 border-b border-warmgray-200 text-warmgray-600 font-semibold">
                         <tr>
-                            <th className="w-12 py-2 text-center border-r border-warmgray-200">
-                                <MoreHorizontal className="h-3 w-3 mx-auto" />
-                            </th>
+                            <th className="w-12 py-2 text-center border-r border-warmgray-200">No</th>
                             <th className="py-2 px-3 text-left border-r border-warmgray-200">Nama Biaya</th>
                             <th className="py-2 px-3 text-center border-r border-warmgray-200 w-32">Kode #</th>
                             <th className="py-2 px-3 text-right w-32">Jumlah</th>
@@ -206,17 +204,10 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId, 
                                 </td>
                             </tr>
                         ) : (
-                            costs.map((item) => (
-                                <tr key={item.id} className="hover:bg-blue-50/30 group">
-                                    <td className="py-1.5 px-2 text-center border-r border-warmgray-100">
-                                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleEdit(item)} className="text-blue-500 hover:text-blue-700">
-                                                <Edit2 className="h-3 w-3" />
-                                            </button>
-                                            <button onClick={() => handleDelete(item.id)} className="text-red-500 hover:text-red-700">
-                                                <Trash2 className="h-3 w-3" />
-                                            </button>
-                                        </div>
+                            costs.map((item, index) => (
+                                <tr key={item.id} className="hover:bg-blue-50/30 cursor-pointer" onClick={() => handleEdit(item)}>
+                                    <td className="py-1.5 px-2 text-center border-r border-warmgray-100 font-semibold text-warmgray-600">
+                                        {index + 1}
                                     </td>
                                     <td className="py-2 px-3 text-warmgray-800 font-medium">{item.accountName}</td>
                                     <td className="py-2 px-3 text-center text-warmgray-500">{item.accountCode}</td>
@@ -230,7 +221,7 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId, 
 
             {/* Cost Detail Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden transform transition-all scale-100">
                         <div className="flex justify-between items-center bg-[#1e293b] px-4 py-3 text-white">
                             <h3 className="font-semibold text-sm flex items-center gap-2">
@@ -297,22 +288,39 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId, 
                             </div>
                         </div>
 
-                        <div className="bg-warmgray-50 px-6 py-3 flex justify-end gap-3 border-t border-warmgray-200">
-                            <Button
-                                variant="secondary"
-                                onClick={() => setIsModalOpen(false)}
-                                className="bg-warmgray-200 hover:bg-warmgray-300 text-warmgray-800 border-none font-semibold text-xs"
-                            >
-                                Batal
-                            </Button>
-                            <Button
-                                variant="primary"
-                                onClick={handleSaveCost}
-                                disabled={Number(amountInput || 0) <= 0}
-                                className="bg-[#d95d39] hover:bg-[#c44e2b] text-white border-none font-semibold shadow-md text-xs"
-                            >
-                                Lanjut
-                            </Button>
+                        <div className="bg-warmgray-50 px-6 py-3 flex justify-between gap-3 border-t border-warmgray-200">
+                            {editingId ? (
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => {
+                                        handleDelete(editingId);
+                                        setIsModalOpen(false);
+                                    }}
+                                    className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 font-semibold text-xs"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                    Hapus
+                                </Button>
+                            ) : (
+                                <div></div>
+                            )}
+                            <div className="flex gap-3">
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => setIsModalOpen(false)}
+                                    className="bg-warmgray-200 hover:bg-warmgray-300 text-warmgray-800 border-none font-semibold text-xs"
+                                >
+                                    Batal
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    onClick={handleSaveCost}
+                                    disabled={Number(amountInput || 0) <= 0}
+                                    className="bg-[#d95d39] hover:bg-[#c44e2b] text-white border-none font-semibold shadow-md text-xs"
+                                >
+                                    Lanjut
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>

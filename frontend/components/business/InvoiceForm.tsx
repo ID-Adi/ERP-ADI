@@ -50,6 +50,7 @@ import InvoiceCostsView, { CostItem } from './invoice/InvoiceCostsView';
 import InvoiceHistoryView from './invoice/InvoiceHistoryView';
 import CustomerSelect from './invoice/CustomerSelect';
 import PaymentTermSelect from '@/components/business/payment/PaymentTermSelect';
+import { paymentTermApi } from '@/lib/api/paymentTerms';
 
 // --- Interfaces ---
 interface LineItem {
@@ -116,6 +117,7 @@ export default function InvoiceForm({
 
   // Data State
   const [customers, setCustomers] = useState<any[]>([]);
+  const [paymentTermsList, setPaymentTermsList] = useState<any[]>([]);
 
   // Centralized State
   const [formData, setFormData] = useState({
@@ -124,26 +126,34 @@ export default function InvoiceForm({
     fakturNumber: initialData.fakturNumber || '',
     // New Fields
     paymentTerms: (initialData as any).paymentTerms || '',
-    taxInclusive: (initialData as any).taxInclusive ?? true, // Default to true (Tax Inclusive)
+    // FIX: Check actual boolean type, not nullish coalescing (which would default false to true)
+    taxInclusive: typeof (initialData as any).taxInclusive === 'boolean'
+      ? (initialData as any).taxInclusive
+      : true,
     shippingDate: (initialData as any).shippingDate || new Date().toISOString().split('T')[0],
     dueDate: initialData.dueDate || new Date().toISOString().split('T')[0], // Default to Now
     salespersonId: initialData.salespersonId || '',
     billingAddress: (initialData as any).billingAddress || '',
+    address: (initialData as any).address || '', // NEW: Alamat pengiriman
   });
 
   const [lines, setLines] = useState<LineItem[]>(initialData.lines || []);
 
-  // Fetch Customers
+  // Fetch Customers and PaymentTerms
   useEffect(() => {
-    const fetchCustomers = async () => {
+    const fetchData = async () => {
       try {
-        const response = await api.get('/customers');
-        setCustomers(response.data.data || []);
+        const [customersResponse, paymentTermsResponse] = await Promise.all([
+          api.get('/customers'),
+          paymentTermApi.getAll()
+        ]);
+        setCustomers(customersResponse.data.data || []);
+        setPaymentTermsList(paymentTermsResponse);
       } catch (error) {
-        console.error('Failed to fetch customers:', error);
+        console.error('Failed to fetch data:', error);
       }
     };
-    fetchCustomers();
+    fetchData();
   }, []);
 
   // Memoize customers to avoid re-rendering CustomerSelect
@@ -269,10 +279,10 @@ export default function InvoiceForm({
   const handleCustomerSelect = (code: string) => {
     const selectedCustomer = customers.find(c => c.code === code);
     setFormData(prev => {
-      const newData = { 
-        ...prev, 
+      const newData = {
+        ...prev,
         vendorCode: code,
-        billingAddress: selectedCustomer?.address || '' 
+        billingAddress: selectedCustomer?.address || ''
       };
 
       // Auto-select payment term if available on customer
@@ -481,9 +491,10 @@ export default function InvoiceForm({
         fakturNumber: isManualFaktur ? formData.fakturNumber : undefined, // Let backend generate if not manual
         fakturDate: formData.fakturDate,
         dueDate: formData.dueDate || null,
-        paymentTerms: (formData as any).paymentTerms, // Include payment terms
+        paymentTerms: (formData as any).paymentTerms, // Include payment terms (ID)
         shippingDate: (formData as any).shippingDate,
         taxInclusive: (formData as any).taxInclusive,
+        address: (formData as any).address || null, // NEW: Alamat pengiriman
         customerId: selectedCustomer.id,
         salespersonId: formData.salespersonId || undefined,
         currency: formData.currency || 'IDR',
@@ -495,7 +506,7 @@ export default function InvoiceForm({
         totalAmount: totals.grandTotal,
         balanceDue: totals.grandTotal,
         notes: formData.memo || '',
-        status: 'UNPAID', // Default to UNPAID (Belum Lunas) instead of DRAFT
+        status: 'UNPAID', // Default to UNPAID (backend will recalculate for updates)
         createdBy: 'admin', // TODO: Get from auth context
         lines: distributedLines,
         costs: otherCosts.map(cost => ({
@@ -720,6 +731,7 @@ export default function InvoiceForm({
               formData={formData}
               onChange={handleFormChange}
               onPaymentTermChange={handlePaymentTermChange}
+              paymentTermsList={paymentTermsList}
             />
           )}
 

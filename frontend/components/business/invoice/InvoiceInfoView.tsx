@@ -10,9 +10,10 @@ interface InvoiceInfoViewProps {
     formData: any;
     onChange: (field: string, value: any) => void;
     onPaymentTermChange: (termId: string, days?: number) => void;
+    paymentTermsList?: any[];
 }
 
-export default function InvoiceInfoView({ formData, onChange, onPaymentTermChange }: InvoiceInfoViewProps) {
+export default function InvoiceInfoView({ formData, onChange, onPaymentTermChange, paymentTermsList }: InvoiceInfoViewProps) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full bg-white rounded-lg shadow-sm border border-warmgray-200 p-6 overflow-auto">
 
@@ -33,6 +34,7 @@ export default function InvoiceInfoView({ formData, onChange, onPaymentTermChang
                             <PaymentTermSelect
                                 value={formData.paymentTerms}
                                 onChange={onPaymentTermChange}
+                                terms={paymentTermsList}
                             />
                         </div>
                     </div>

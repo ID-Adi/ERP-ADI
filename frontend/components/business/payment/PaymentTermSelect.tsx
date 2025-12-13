@@ -6,24 +6,31 @@ interface PaymentTermSelectProps {
     onChange: (value: string, days?: number) => void;
     className?: string;
     disabled?: boolean;
+    terms?: PaymentTerm[];
 }
 
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export default function PaymentTermSelect({ value, onChange, className = '', disabled = false }: PaymentTermSelectProps) {
-    const [terms, setTerms] = useState<PaymentTerm[]>([]);
+export default function PaymentTermSelect({ value, onChange, className = '', disabled = false, terms: externalTerms }: PaymentTermSelectProps) {
+    const [internalTerms, setInternalTerms] = useState<PaymentTerm[]>([]);
     const [loading, setLoading] = useState(true);
     const [isOpen, setIsOpen] = useState(false);
 
+    const terms = externalTerms || internalTerms;
+
     useEffect(() => {
-        loadTerms();
-    }, []);
+        if (externalTerms) {
+            setLoading(false);
+        } else {
+            loadTerms();
+        }
+    }, [externalTerms]);
 
     const loadTerms = async () => {
         try {
             const data = await paymentTermApi.getAll();
-            setTerms(data);
+            setInternalTerms(data);
         } catch (error) {
             console.error('Failed to load payment terms', error);
         } finally {
@@ -45,7 +52,7 @@ export default function PaymentTermSelect({ value, onChange, className = '', dis
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled || loading}
                 className={cn(
-                    "w-full px-3 py-2 border rounded-lg bg-white flex items-center justify-between text-sm transition-all text-warmgray-900",
+                    "w-full px-3 py-2 border rounded bg-white flex items-center justify-between text-sm transition-all text-warmgray-900",
                     isOpen ? "ring-1 ring-primary-500 border-primary-500" : "border-warmgray-300 hover:bg-warmgray-50",
                     (disabled || loading) && "opacity-50 cursor-not-allowed",
                     className
@@ -60,7 +67,7 @@ export default function PaymentTermSelect({ value, onChange, className = '', dis
             {isOpen && (
                 <>
                     <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-warmgray-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-warmgray-200 rounded shadow-lg z-20 max-h-60 overflow-y-auto">
                         {terms.length === 0 ? (
                             <div className="px-3 py-2 text-sm text-warmgray-500 text-center">
                                 Tidak ada data

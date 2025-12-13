@@ -32,8 +32,11 @@ export default function EditInvoicePage() {
       id: apiData.id,
       salespersonId: apiData.salespersonId || '', // Include invoice-level salesperson
       paymentTerms: apiData.paymentTermId || apiData.paymentTerms || '', // Fallback to paymentTerms col (legacy ID)
-      taxInclusive: apiData.taxInclusive ?? true,
+      // FIX: Use explicit boolean check, not nullish coalescing (false ?? true = false, but we want to preserve actual value)
+      taxInclusive: typeof apiData.taxInclusive === 'boolean' ? apiData.taxInclusive : true,
       shippingDate: apiData.shippingDate?.split('T')[0] || '',
+      address: apiData.address || '', // NEW: Alamat pengiriman
+      totalCost: Number(apiData.totalCost || 0), // NEW: Total biaya dari DB
       lines: apiData.lines?.map((line: any) => ({
         id: line.id,
         itemId: line.itemId,

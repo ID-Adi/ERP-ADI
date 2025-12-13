@@ -38,16 +38,15 @@ export default function CustomerSelect({ value, onChange, customers, placeholder
     }, []);
 
     // Update internal search query when value changes externally or selected
-    // Using customersRef to avoid infinite loop from customers dependency
     useEffect(() => {
-        const selected = customersRef.current.find(c => c.code === value);
+        const selected = customers.find(c => c.code === value);
         if (selected) {
             // Only update if not open to avoid disrupting typing
             if (!isOpen) setSearchQuery(selected.name);
         } else {
             if (!isOpen) setSearchQuery('');
         }
-    }, [value, isOpen]); // Removed 'customers' from dependency - using ref instead
+    }, [value, isOpen, customers]);
 
     const filteredCustomers = customers.filter(c =>
         c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

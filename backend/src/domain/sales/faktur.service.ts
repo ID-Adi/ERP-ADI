@@ -92,6 +92,75 @@ export class FakturService {
         }
     }
 
+    // Helper: Validate Stock for UPDATE - only check delta (new qty - existing qty)
+    private async validateStockForUpdate(tx: Prisma.TransactionClient, newLines: any[], existingLines: any[]) {
+        // Build map of existing qty per item+warehouse
+        const existingQtyMap = new Map<string, number>();
+        for (const line of existingLines) {
+            if (!line.itemId) continue;
+            const key = `${line.itemId}-${line.warehouseId || 'default'}`;
+            existingQtyMap.set(key, (existingQtyMap.get(key) || 0) + Number(line.quantity));
+        }
+
+        // Filter lines that need validation
+        const validLines = newLines.filter(line => line.itemId && line.quantity);
+        if (validLines.length === 0) return;
+
+        // Batch fetch all items
+        const itemIds = [...new Set(validLines.map(l => l.itemId))];
+        const items = await tx.item.findMany({ where: { id: { in: itemIds } } });
+        const itemMap = new Map(items.map(i => [i.id, i]));
+
+        const stockItems = items.filter(i => i.isStockItem);
+        if (stockItems.length === 0) return;
+
+        // Get default warehouse
+        const companyId = stockItems[0].companyId;
+        const defWh = await tx.warehouse.findFirst({ where: { companyId } });
+        const defaultWarehouseId = defWh?.id || null;
+
+        // Collect warehouse IDs
+        const warehouseIds = new Set<string>();
+        for (const line of validLines) {
+            const item = itemMap.get(line.itemId);
+            if (!item || !item.isStockItem) continue;
+            const warehouseId = line.warehouseId || defaultWarehouseId;
+            if (warehouseId) warehouseIds.add(warehouseId);
+        }
+
+        // Batch fetch stocks
+        const stocks = await tx.itemStock.findMany({
+            where: {
+                itemId: { in: itemIds },
+                warehouseId: { in: Array.from(warehouseIds) }
+            }
+        });
+        const stockMap = new Map(stocks.map(s => [`${s.itemId}-${s.warehouseId}`, s]));
+
+        // Validate only the DELTA (increase) for each line
+        for (const line of validLines) {
+            const item = itemMap.get(line.itemId);
+            if (!item || !item.isStockItem) continue;
+
+            const warehouseId = line.warehouseId || defaultWarehouseId;
+            if (!warehouseId) throw new Error(`Gudang tidak ditentukan untuk item: ${item.name}`);
+
+            const key = `${line.itemId}-${warehouseId}`;
+            const existingQty = existingQtyMap.get(key) || 0;
+            const newQty = Number(line.quantity);
+            const delta = newQty - existingQty; // Only check if qty increases
+
+            if (delta > 0) {
+                const stock = stockMap.get(key);
+                const available = stock ? Number(stock.availableStock) : 0;
+
+                if (available < delta) {
+                    throw new Error(`Stok tidak mencukupi untuk item: ${item.name}. Tersedia: ${available}, Penambahan diminta: ${delta}`);
+                }
+            }
+        }
+    }
+
     // Helper: Update Stock - OPTIMIZED with batch fetching
     private async updateStock(tx: Prisma.TransactionClient, lines: any[], direction: 'IN' | 'OUT') {
         // Filter lines that need stock update
@@ -256,6 +325,11 @@ export class FakturService {
                 }
             }
 
+            // Calculate totalCost from costs array
+            const totalCost = data.costs
+                ? data.costs.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0)
+                : 0;
+
             const fp = await tx.faktur.create({
                 data: {
                     ...restData,
@@ -270,6 +344,8 @@ export class FakturService {
                     paymentTerms: paymentTermName, // Store NAME for display/reporting
                     paymentTermId: paymentTermId,  // Store ID for relation
                     taxInclusive: data.taxInclusive ?? true,
+                    address: data.address || null, // NEW: Alamat
+                    totalCost: totalCost,          // NEW: Total biaya lainnya
                     lines: {
                         create: data.lines.map((l: any) => ({
                             itemId: l.itemId,
@@ -282,7 +358,9 @@ export class FakturService {
                             discountAmount: l.discountAmount,
                             amount: l.amount,
                             warehouseId: l.warehouseId,
-                            salespersonId: l.salespersonId || undefined
+                            salespersonId: l.salespersonId || undefined,
+                            subtotalBeforeDiscount: Number(l.quantity) * Number(l.unitPrice), // NEW
+                            customerId: data.customerId || null  // NEW
                         }))
                     },
                     costs: data.costs ? {
@@ -354,16 +432,40 @@ export class FakturService {
                 }
             }
 
+            // Calculate NEW status based on existing amountPaid and new totalAmount
+            const newTotalAmount = Number(data.totalAmount || 0);
+            const currentAmountPaid = Number(existing.amountPaid || 0);
+            const newBalanceDue = newTotalAmount - currentAmountPaid;
+
+            let computedStatus: FakturStatus;
+            if (currentAmountPaid <= 0) {
+                computedStatus = 'UNPAID';
+            } else if (currentAmountPaid >= newTotalAmount) {
+                computedStatus = 'PAID'; // Termasuk kelebihan bayar
+            } else {
+                computedStatus = 'PARTIAL';
+            }
+
+            // Calculate totalCost from costs array
+            const totalCost = data.costs
+                ? data.costs.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0)
+                : 0;
+
             const fp = await tx.faktur.update({
                 where: { id },
                 data: {
                     ...data,
                     companyId: undefined, // Prevent updating companyId
+                    status: computedStatus, // USE COMPUTED STATUS, not from frontend
+                    amountPaid: undefined, // Preserve existing amountPaid
+                    balanceDue: newBalanceDue, // Recalculate based on new total
                     fakturDate: data.fakturDate ? new Date(data.fakturDate) : undefined,
                     dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
                     shippingDate: data.shippingDate ? new Date(data.shippingDate) : undefined,
                     paymentTerms: paymentTermName, // Store NAME for display/reporting
                     paymentTermId: paymentTermId,  // Update relation
+                    address: data.address || null, // NEW: Alamat
+                    totalCost: totalCost,          // NEW: Total biaya lainnya
                     lines: {
                         create: data.lines.map((l: any) => ({
                             itemId: l.itemId,
@@ -376,7 +478,9 @@ export class FakturService {
                             discountAmount: l.discountAmount,
                             amount: l.amount,
                             warehouseId: l.warehouseId,
-                            salespersonId: l.salespersonId || undefined
+                            salespersonId: l.salespersonId || undefined,
+                            subtotalBeforeDiscount: Number(l.quantity) * Number(l.unitPrice), // NEW
+                            customerId: data.customerId || existing.customerId || null  // NEW
                         }))
                     },
                     costs: data.costs ? {
@@ -400,8 +504,8 @@ export class FakturService {
                 fp.status !== 'CANCELLED';
 
             if (fp.status !== 'DRAFT' && fp.status !== 'CANCELLED') {
-                // ALWAYS validate stock when publishing or when already published
-                await this.validateStock(tx, fp.lines);
+                // Use delta validation for edit mode
+                await this.validateStockForUpdate(tx, fp.lines, existing.lines);
                 await this.updateStock(tx, fp.lines, 'OUT');
                 await this.createJournalEntries(tx, fp, fp.lines, fp.companyId);
             }

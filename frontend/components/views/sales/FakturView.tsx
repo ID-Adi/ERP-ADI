@@ -401,7 +401,7 @@ export default function FakturView() {
                                 [...Array(10)].map((_, i) => <TableSkeletonRow key={i} />)
                             )}
                             {invoices.map((invoice: any, index: number) => {
-                                const badge = getStatusBadge(invoice.status);
+                                const badge = getStatusBadge(invoice.status, invoice);
                                 return (
                                     <tr
                                         key={`${invoice.id}-${index}`}
@@ -498,14 +498,22 @@ const transformInvoiceData = (apiData: any) => {
 
 // Helper Components
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, invoice?: { amountPaid?: number, totalAmount?: number, total?: number }) {
+    // Check for overpayment (amountPaid > totalAmount)
+    const amountPaid = Number(invoice?.amountPaid || 0);
+    const totalAmount = Number(invoice?.totalAmount || invoice?.total || 0);
+
+    if (status === 'PAID' && amountPaid > totalAmount && totalAmount > 0) {
+        return { label: 'Kelebihan Bayar', className: 'bg-purple-100 text-purple-700' };
+    }
+
     switch (status) {
         case 'DRAFT': return { label: 'Draf', className: 'bg-gray-100 text-gray-700' };
         case 'PENDING': return { label: 'Diajukan', className: 'bg-blue-100 text-blue-700' }; // Assuming Pending is Blue-ish or Yellow
         case 'REJECTED': return { label: 'Ditolak', className: 'bg-red-100 text-red-700' };
         case 'UNPAID': return { label: 'Belum Lunas', className: 'bg-warmgray-200 text-warmgray-700' }; // Or ISSUED
         case 'ISSUED': return { label: 'Belum Lunas', className: 'bg-warmgray-200 text-warmgray-700' }; // Legacy support
-        case 'PARTIAL': return { label: 'Belum Lunas', className: 'bg-warmgray-200 text-warmgray-700' }; // Mapped to Belum Lunas
+        case 'PARTIAL': return { label: 'Sebagian', className: 'bg-yellow-100 text-yellow-700' }; // Changed to yellow to differentiate
         case 'PAID': return { label: 'Lunas', className: 'bg-green-100 text-green-700' };
         case 'OVERDUE': return { label: 'Jatuh Tempo', className: 'bg-red-100 text-red-700' };
         case 'CANCELLED': return { label: 'Dibatalkan', className: 'bg-gray-200 text-gray-700' };
