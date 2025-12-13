@@ -141,6 +141,7 @@ export default function ReceiptForm({ initialData, onSuccess }: ReceiptFormProps
             }
         };
         fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // --- Fetch Invoices when Customer Changes ---
@@ -183,6 +184,7 @@ export default function ReceiptForm({ initialData, onSuccess }: ReceiptFormProps
         };
 
         fetchInvoices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [formData.customerId, selectedInvoices.length]);
 
     // --- Handlers ---

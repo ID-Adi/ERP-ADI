@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Printer,
@@ -75,7 +75,7 @@ export default function IncomeStatementPage() {
     });
 
     // --- Data Fetching ---
-    const fetchReport = async () => {
+    const fetchReport = useCallback(async () => {
         try {
             setLoading(true);
             const response = await api.get('/reports/income-statement', {
@@ -91,11 +91,11 @@ export default function IncomeStatementPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [dateRange, addToast]);
 
     useEffect(() => {
         fetchReport();
-    }, [dateRange]);
+    }, [fetchReport]);
 
     const handlePrint = () => {
         window.print();

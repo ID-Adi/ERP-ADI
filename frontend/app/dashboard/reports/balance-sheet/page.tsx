@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Printer,
@@ -66,7 +66,7 @@ export default function BalanceSheetPage() {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
     // --- Data Fetching ---
-    const fetchReport = async () => {
+    const fetchReport = useCallback(async () => {
         try {
             setLoading(true);
             const response = await api.get('/reports/balance-sheet', {
@@ -79,11 +79,11 @@ export default function BalanceSheetPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [date, addToast]);
 
     useEffect(() => {
         fetchReport();
-    }, [date]);
+    }, [fetchReport]);
 
     const handlePrint = () => {
         window.print();

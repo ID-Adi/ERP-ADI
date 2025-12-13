@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Search, Package, X, Plus, RefreshCw, Download, Printer } from 'lucide-react';
+import { Search, Package, X, Plus, RefreshCw, Download, Printer, Calendar } from 'lucide-react';
 import { Button, Card, Badge, PageTransition, useToast } from '@/components/ui';
 import Modal from '@/components/ui/Modal';
 import { formatCurrency, formatNumber } from '@/lib/utils';

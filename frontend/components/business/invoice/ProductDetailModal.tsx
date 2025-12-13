@@ -105,6 +105,7 @@ export default function ProductDetailModal({
             }
         };
         fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, formData.itemId]); // Refetch when modal opens or item changes
 
     useEffect(() => {

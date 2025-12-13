@@ -192,6 +192,7 @@ export default function InvoiceForm({
       // No lines at all - clear salesperson
       setFormData(prev => ({ ...prev, salespersonId: '' }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines]);
 
   // Calculations State
