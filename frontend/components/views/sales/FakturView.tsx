@@ -473,6 +473,15 @@ const transformInvoiceData = (apiData: any) => {
         currency: apiData.currency || 'IDR',
         id: apiData.id,
         salespersonId: apiData.salespersonId || '', // Map Salesperson
+        paymentTerms: apiData.paymentTermId || '', // Map Payment Terms ID
+        taxInclusive: apiData.taxInclusive ?? true,
+        address: apiData.address || '',
+        costs: apiData.costs?.map((cost: any) => ({
+            id: cost.id,
+            accountId: cost.accountId,
+            amount: Number(cost.amount),
+            notes: cost.notes || ''
+        })) || [],
         lines: apiData.lines?.map((line: any) => ({
             id: line.id,
             itemId: line.itemId,

@@ -482,6 +482,7 @@ model Faktur {
   costs           FakturCost[]
   lines           FakturLine[]
   receiptLines    SalesReceiptLine[]
+  salesReturns    SalesReturn[]
 
   @@unique([companyId, fakturNumber])
   @@index([companyId])
@@ -567,6 +568,50 @@ model SalesReceipt {
   @@index([bankAccountId])
   @@index([companyId, status])
   @@index([customerId, receiptDate])
+}
+
+model SalesReturn {
+  id              String            @id @default(uuid())
+  companyId       String
+  returnNumber    String
+  returnDate      DateTime
+  fakturId        String
+  customerId      String
+  status          ReturnStatus      @default(DRAFT)
+  totalAmount     Decimal           @db.Decimal(15, 2)
+  notes           String?
+  createdBy       String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  company         Company           @relation(fields: [companyId], references: [id])
+  customer        Customer          @relation(fields: [customerId], references: [id])
+  faktur          Faktur            @relation(fields: [fakturId], references: [id])
+  lines           SalesReturnLine[]
+
+  @@unique([companyId, returnNumber])
+  @@index([companyId])
+  @@index([customerId])
+  @@index([fakturId])
+  @@index([returnDate])
+  @@index([status])
+}
+
+model SalesReturnLine {
+  id              String      @id @default(uuid())
+  salesReturnId   String
+  itemId          String
+  description     String?
+  quantity        Decimal     @db.Decimal(10, 2)
+  unitPrice       Decimal     @db.Decimal(15, 2)
+  amount          Decimal     @db.Decimal(15, 2)
+  warehouseId     String?
+  item            Item        @relation(fields: [itemId], references: [id])
+  salesReturn     SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse?  @relation(fields: [warehouseId], references: [id])
+
+  @@index([salesReturnId])
+  @@index([itemId])
+  @@index([warehouseId])
 }
 
 model SalesReceiptLine {
@@ -746,6 +791,12 @@ enum FakturStatus {
 }
 
 enum ReceiptStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+enum ReturnStatus {
   DRAFT
   POSTED
   CANCELLED

@@ -21,10 +21,11 @@ interface InvoiceHistoryViewProps {
 
 export default function InvoiceHistoryView({ formData, totals, invoiceId }: InvoiceHistoryViewProps) {
     const [history, setHistory] = useState<any[]>([]);
+    const [returns, setReturns] = useState<any[]>([]);
     const [salespersonName, setSalespersonName] = useState<string>('-');
     const [isLoading, setIsLoading] = useState(false);
 
-    // Fetch Payment History & Salesperson
+    // Fetch Payment History & Salesperson & Returns
     useEffect(() => {
         const fetchData = async () => {
             if (!invoiceId) return;
@@ -40,11 +41,31 @@ export default function InvoiceHistoryView({ formData, totals, invoiceId }: Invo
                     id: r.id,
                     date: new Date(r.receiptDate).toLocaleDateString('id-ID'),
                     desc: r.receiptNumber,
-                    amount: r.lines.find((l: any) => l.fakturId === invoiceId)?.amount || 0
+                    amount: r.lines.find((l: any) => l.fakturId === invoiceId)?.amount || 0,
+                    type: 'PAYMENT'
                 }));
-                setHistory(receipts);
 
-                // 2. Fetch Salesperson Name if ID exists
+                // 2. Fetch Returns
+                let returnsData: any[] = [];
+                try {
+                    const returnsRes = await api.get('/sales-returns', {
+                         params: { fakturId: invoiceId }
+                    });
+                    returnsData = returnsRes.data.map((r: any) => ({
+                        id: r.id,
+                        date: new Date(r.returnDate).toLocaleDateString('id-ID'),
+                        desc: r.returnNumber,
+                        amount: Number(r.totalAmount), // Use totalAmount from SalesReturn
+                        type: 'RETURN'
+                    }));
+                } catch (e) {
+                    console.warn("Returns fetch failed (likely endpoint not ready)", e);
+                }
+
+                setHistory([...receipts, ...returnsData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+                setReturns(returnsData);
+
+                // 3. Fetch Salesperson Name if ID exists
                 if (formData.salespersonId) {
                     try {
                         const spRes = await api.get(`/salespersons/${formData.salespersonId}`);
@@ -66,12 +87,16 @@ export default function InvoiceHistoryView({ formData, totals, invoiceId }: Invo
     }, [invoiceId, formData.salespersonId]);
 
     // Calculations
-    const totalPaid = history.reduce((sum, h) => sum + h.amount, 0);
-    const downPayment = 0; // TODO: If DP is separate, handle it. For now assuming included in payments or 0.
-    const returned = 0; // TODO: Handle returns if implemented
-    const remainingBalance = totals.grandTotal - totalPaid - returned;
+    const totalPaid = history.filter(h => h.type === 'PAYMENT').reduce((sum, h) => sum + h.amount, 0);
+    const totalReturned = history.filter(h => h.type === 'RETURN').reduce((sum, h) => sum + h.amount, 0);
+    const downPayment = 0; // TODO: If DP is separate, handle it.
+    
+    // Remaining Balance = GrandTotal - Paid - Returned
+    // Note: If Backend updates balanceDue automatically, we could use that, but for display consistency we calc here.
+    const remainingBalance = totals.grandTotal - totalPaid - totalReturned;
 
     // Status Logic
+    // If balance is <= 0, it is Paid (or fully returned)
     const isPaid = remainingBalance <= 0 && totals.grandTotal > 0;
     const isPartial = totalPaid > 0 && remainingBalance > 0;
     const statusLabel = isPaid ? 'Lunas' : isPartial ? 'Sebagian' : 'Belum Lunas';
@@ -102,7 +127,7 @@ export default function InvoiceHistoryView({ formData, totals, invoiceId }: Invo
                     </div>
                     <div className="flex justify-between p-2 border-b border-warmgray-100">
                         <span className="text-warmgray-600">Retur</span>
-                        <span className="font-medium">{formatCurrency(returned)}</span>
+                        <span className="font-medium">{formatCurrency(totalReturned)}</span>
                     </div>
                     <div className="flex justify-between p-2 border-b border-warmgray-100">
                         <span className="text-warmgray-600">Piutang</span>
@@ -125,11 +150,11 @@ export default function InvoiceHistoryView({ formData, totals, invoiceId }: Invo
                 </div>
             </div>
 
-            {/* Right: Riwayat Pembayaran */}
+            {/* Right: Riwayat Pembayaran & Retur */}
             <div className="space-y-4 relative">
                 <div className="flex items-center gap-2 text-primary-700 font-semibold border-b border-primary-100 pb-2">
                     <History className="h-5 w-5" />
-                    <h3>Riwayat Pembayaran</h3>
+                    <h3>Riwayat Transaksi</h3>
                 </div>
 
                 {/* Stamp LUNAS - Only show if fully paid */}
@@ -158,16 +183,31 @@ export default function InvoiceHistoryView({ formData, totals, invoiceId }: Invo
                         </div>
                     ) : history.length === 0 ? (
                         <div className="text-center py-8 text-warmgray-400 italic">
-                            Belum ada riwayat pembayaran.
+                            Belum ada riwayat transaksi.
                         </div>
                     ) : (
                         history.map(h => (
                             <div key={h.id} className="flex justify-between p-3 border-b border-warmgray-100 last:border-0 hover:bg-blue-50/30">
                                 <div className="flex flex-col">
-                                    <span className="text-blue-600 font-medium">{h.desc}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={cn(
+                                            "font-medium", 
+                                            h.type === 'RETURN' ? "text-red-600" : "text-blue-600"
+                                        )}>
+                                            {h.desc}
+                                        </span>
+                                        {h.type === 'RETURN' && (
+                                            <span className="text-[10px] bg-red-100 text-red-600 px-1 rounded border border-red-200">Retur</span>
+                                        )}
+                                    </div>
                                     <span className="text-xs text-warmgray-500">{h.date}</span>
                                 </div>
-                                <span className="font-medium">{formatCurrency(h.amount)}</span>
+                                <span className={cn(
+                                    "font-medium",
+                                    h.type === 'RETURN' ? "text-red-600" : ""
+                                )}>
+                                    {h.type === 'RETURN' ? '-' : ''} {formatCurrency(h.amount)}
+                                </span>
                             </div>
                         ))
                     )}
@@ -178,4 +218,3 @@ export default function InvoiceHistoryView({ formData, totals, invoiceId }: Invo
         </div>
     );
 }
-

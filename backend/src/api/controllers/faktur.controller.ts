@@ -146,6 +146,7 @@ router.get('/:id', async (req: Request, res: Response) => {
             where: { id },
             include: {
                 customer: true,
+                paymentTerm: true, // Include payment term data
                 salesperson: true, // Include salesperson data
                 lines: {
                     include: {
