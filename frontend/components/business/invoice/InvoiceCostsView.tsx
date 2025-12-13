@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, MoreHorizontal, Plus, Trash2, Edit2, X, Save } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -220,7 +221,7 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId, 
             </div>
 
             {/* Cost Detail Modal */}
-            {isModalOpen && (
+            {isModalOpen && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden transform transition-all scale-100">
                         <div className="flex justify-between items-center bg-[#1e293b] px-4 py-3 text-white">
@@ -263,13 +264,18 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId, 
                                     <input
                                         type="number"
                                         value={amountInput}
-                                        onFocus={(e) => e.target.value === '0' && setAmountInput('')}
-                                        onBlur={(e) => e.target.value === '' && setAmountInput(0)}
+                                        onFocus={(e) => {
+                                            if (amountInput === 0) setAmountInput('');
+                                            e.target.select();
+                                        }}
+                                        onBlur={(e) => {
+                                            if (e.target.value === '') setAmountInput(0);
+                                        }}
                                         onChange={(e) => {
                                             const val = e.target.value;
                                             setAmountInput(val === '' ? '' : Number(val));
                                         }}
-                                        className="w-full pl-9 pr-3 py-2 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 text-right font-medium transition-shadow"
+                                        className="w-full pl-9 pr-3 py-2 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 text-right font-medium transition-shadow [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         autoFocus
                                     />
                                 </div>
@@ -282,7 +288,7 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId, 
                                 <textarea
                                     value={notesInput}
                                     onChange={(e) => setNotesInput(e.target.value)}
-                                    className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 transition-shadow"
+                                    className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm focus:outline-none focus:border-primary-500 transition-shadow resize-none"
                                     rows={2}
                                 />
                             </div>
@@ -323,7 +329,8 @@ export default function InvoiceCostsView({ invoiceStatus = 'UNPAID', invoiceId, 
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
         </div>

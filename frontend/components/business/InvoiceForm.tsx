@@ -653,38 +653,41 @@ export default function InvoiceForm({
                 </div>
               </div>
 
-              {/* Date */}
-              {/* Date */}
+              {/* Payment Terms */}
               <div className="w-full max-w-[200px]">
-                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Tanggal Faktur</label>
-                <div className="relative">
-                  <DatePicker
-                    value={formData.fakturDate}
-                    onChange={(e) => handleDateChange({ target: { name: 'fakturDate', value: e.target.value } } as any)}
-                    className="w-full"
+                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Syarat Pembayaran <span className="text-red-500">*</span></label>
+                <div className="relative h-[38px] min-h-[38px] max-h-[38px]">
+                  <PaymentTermSelect
+                    value={formData.paymentTerms}
+                    onChange={handlePaymentTermChange}
+                    terms={paymentTermsList}
+                    className="h-full"
                   />
                 </div>
               </div>
 
-              {/* Currency */}
-              <div className="w-full max-w-[100px]">
-                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Mata Uang</label>
-                <div className="relative">
-                  <div className="w-full px-3 h-[38px] border border-warmgray-300 rounded text-sm bg-warmgray-50 text-warmgray-500 font-medium flex items-center justify-center cursor-not-allowed select-none">
-                    IDR
-                  </div>
+              {/* Date */}
+              {/* Date */}
+              <div className="w-full max-w-[170px]">
+                <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">Tanggal Faktur</label>
+                <div className="relative h-[38px] min-h-[38px] max-h-[38px]">
+                  <DatePicker
+                    value={formData.fakturDate}
+                    onChange={(e) => handleDateChange({ target: { name: 'fakturDate', value: e.target.value } } as any)}
+                    className="w-full h-full"
+                  />
                 </div>
               </div>
 
               {/* Invoice Number (Right) */}
-              <div className="w-full max-w-[350px] ml-auto lg:ml-0">
+              <div className="w-full max-w-[265px]">
                 <label className="block text-[10px] font-bold text-warmgray-500 uppercase tracking-wider mb-1">No. Faktur</label>
 
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-2 items-center h-[38px] min-h-[38px] max-h-[38px]">
                   {/* Toggle Switch (Only visible for NEW invoices) */}
                   {!initialData.id && (
                     <div
-                      className="flex items-center justify-center h-[38px] px-2 cursor-pointer group rounded border border-transparent hover:bg-warmgray-50 transition-colors"
+                      className="flex items-center justify-center h-full px-2 cursor-pointer group rounded border border-transparent hover:bg-warmgray-50 transition-colors"
                       onClick={handleManualFakturToggle}
                       title={isManualFaktur ? "Mode Manual Aktif" : "Mode Auto-Generated"}
                     >
@@ -700,15 +703,15 @@ export default function InvoiceForm({
                     </div>
                   )}
 
-                  <div className="relative flex-1">
+                  <div className="relative flex-1 h-full">
                     <input
                       type="text"
                       value={formData.fakturNumber}
                       readOnly={!isManualFaktur}
                       onChange={(e) => handleFormChange('fakturNumber', e.target.value)}
-                      placeholder={isManualFaktur ? "Masukkan No. Faktur" : "Auto-Generated"}
+                      placeholder={isManualFaktur ? "No. Faktur" : "Auto"}
                       className={cn(
-                        "w-full pl-9 pr-3 h-[38px] border rounded text-sm font-medium transition-all focus:outline-none",
+                        "w-full pl-9 pr-3 h-full border rounded text-sm font-medium transition-all focus:outline-none",
                         isManualFaktur
                           ? "bg-white border-warmgray-300 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-warmgray-900"
                           : "bg-warmgray-100 border-warmgray-200 text-warmgray-500 cursor-not-allowed select-none"
@@ -742,8 +745,6 @@ export default function InvoiceForm({
             <InvoiceInfoView
               formData={formData}
               onChange={handleFormChange}
-              onPaymentTermChange={handlePaymentTermChange}
-              paymentTermsList={paymentTermsList}
             />
           )}
 

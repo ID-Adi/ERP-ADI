@@ -264,61 +264,73 @@ export default function ProductDetailModal({
                     {/* Row 3: Quantity */}
                     <div className="grid grid-cols-12 gap-3 items-center">
                         <label className="col-span-3 text-sm font-medium text-warmgray-700">Kuantitas</label>
-                        <div className="col-span-9 flex gap-4">
-                            <div className="w-[120px] relative">
-                                <input
-                                    type="number"
-                                    value={formData.quantity}
-                                    onChange={(e) => handleChange('quantity', e.target.value === '' ? '' : parseFloat(e.target.value))}
-                                    onFocus={(e) => { if (formData.quantity === 0) handleChange('quantity', ''); e.target.select(); }}
-                                    onBlur={(e) => { if (e.target.value === '' || isNaN(parseFloat(e.target.value))) handleChange('quantity', 1); }}
-                                    className="w-full pl-3 pr-8 py-1.5 border border-warmgray-300 rounded focus:outline-none focus:ring-0 focus:border-primary-500 text-sm text-right font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                />
-                                <Calculator className="absolute right-2 top-2 h-4 w-4 text-warmgray-400 pointer-events-none" />
-                            </div>
+                        <div className="col-span-9 flex flex-col gap-1">
+                            <div className="flex gap-4">
+                                <div className="w-[120px] relative">
+                                    <input
+                                        type="number"
+                                        value={formData.quantity}
+                                        onChange={(e) => handleChange('quantity', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                        onFocus={(e) => { if (formData.quantity === 0) handleChange('quantity', ''); e.target.select(); }}
+                                        onBlur={(e) => { if (e.target.value === '' || isNaN(parseFloat(e.target.value))) handleChange('quantity', 1); }}
+                                        className={cn(
+                                            "w-full pl-3 pr-8 py-1.5 border rounded focus:outline-none focus:ring-0 text-sm text-right font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                                            formData.warehouseId && warehouses.find(w => w.id === formData.warehouseId)?.stock !== undefined && formData.quantity > (warehouses.find(w => w.id === formData.warehouseId)?.stock || 0)
+                                                ? "border-red-500 text-red-600 focus:border-red-500 bg-red-50"
+                                                : "border-warmgray-300 focus:border-primary-500"
+                                        )}
+                                    />
+                                    <Calculator className="absolute right-2 top-2 h-4 w-4 text-warmgray-400 pointer-events-none" />
+                                </div>
 
-                            {/* Unit Dropdown */}
-                            <div className="flex items-center gap-2 flex-1">
-                                <span className="text-sm font-medium text-warmgray-700">Unit</span>
-                                <div className="relative flex-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowUnitDropdown(!showUnitDropdown)}
-                                        className="w-full flex items-center justify-between px-3 py-1.5 border border-warmgray-300 rounded bg-white hover:bg-warmgray-50 focus:outline-none focus:ring-0 focus:border-primary-500 text-sm text-left"
-                                    >
-                                        <span className="font-medium text-warmgray-900">{formData.unit}</span>
-                                        <Search className="h-4 w-4 text-warmgray-400" />
-                                    </button>
+                                {/* Unit Dropdown */}
+                                <div className="flex items-center gap-2 flex-1">
+                                    <span className="text-sm font-medium text-warmgray-700">Unit</span>
+                                    <div className="relative flex-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowUnitDropdown(!showUnitDropdown)}
+                                            className="w-full flex items-center justify-between px-3 py-1.5 border border-warmgray-300 rounded bg-white hover:bg-warmgray-50 focus:outline-none focus:ring-0 focus:border-primary-500 text-sm text-left"
+                                        >
+                                            <span className="font-medium text-warmgray-900">{formData.unit}</span>
+                                            <Search className="h-4 w-4 text-warmgray-400" />
+                                        </button>
 
-                                    {/* Dropdown Menu */}
-                                    {showUnitDropdown && (
-                                        <>
-                                            <div
-                                                className="fixed inset-0 z-10"
-                                                onClick={() => setShowUnitDropdown(false)}
-                                            />
-                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-warmgray-200 rounded shadow-lg max-h-40 overflow-y-auto z-20">
-                                                {units.map((u) => (
-                                                    <button
-                                                        key={u}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            handleChange('unit', u);
-                                                            setShowUnitDropdown(false);
-                                                        }}
-                                                        className={cn(
-                                                            "w-full text-left px-3 py-2 text-sm hover:bg-warmgray-50 transition-colors",
-                                                            formData.unit === u ? "bg-primary-50 text-primary-700 font-medium" : "text-warmgray-700"
-                                                        )}
-                                                    >
-                                                        {u}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </>
-                                    )}
+                                        {/* Dropdown Menu */}
+                                        {showUnitDropdown && (
+                                            <>
+                                                <div
+                                                    className="fixed inset-0 z-10"
+                                                    onClick={() => setShowUnitDropdown(false)}
+                                                />
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-warmgray-200 rounded shadow-lg max-h-40 overflow-y-auto z-20">
+                                                    {units.map((u) => (
+                                                        <button
+                                                            key={u}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                handleChange('unit', u);
+                                                                setShowUnitDropdown(false);
+                                                            }}
+                                                            className={cn(
+                                                                "w-full text-left px-3 py-2 text-sm hover:bg-warmgray-50 transition-colors",
+                                                                formData.unit === u ? "bg-primary-50 text-primary-700 font-medium" : "text-warmgray-700"
+                                                            )}
+                                                        >
+                                                            {u}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
+                            {formData.warehouseId && warehouses.find(w => w.id === formData.warehouseId)?.stock !== undefined && formData.quantity > (warehouses.find(w => w.id === formData.warehouseId)?.stock || 0) && (
+                                <span className="text-xs text-red-600 font-medium animate-pulse">
+                                    Stok tidak mencukupi! Tersedia: {warehouses.find(w => w.id === formData.warehouseId)?.stock || 0} {formData.unit}
+                                </span>
+                            )}
                         </div>
                     </div>
 

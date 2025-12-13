@@ -4,16 +4,14 @@ import { MapPin, Truck, AlertCircle, Search, X, Receipt } from 'lucide-react';
 // import SearchableSelect from '@/components/ui/SearchableSelect'; // Unused
 import DatePicker from '@/components/ui/DatePicker';
 import { cn } from '@/lib/utils';
-import PaymentTermSelect from '@/components/business/payment/PaymentTermSelect';
+
 
 interface InvoiceInfoViewProps {
     formData: any;
     onChange: (field: string, value: any) => void;
-    onPaymentTermChange: (termId: string, days?: number) => void;
-    paymentTermsList?: any[];
 }
 
-export default function InvoiceInfoView({ formData, onChange, onPaymentTermChange, paymentTermsList }: InvoiceInfoViewProps) {
+export default function InvoiceInfoView({ formData, onChange }: InvoiceInfoViewProps) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full bg-white rounded-lg shadow-sm border border-warmgray-200 p-6 overflow-auto">
 
@@ -25,21 +23,7 @@ export default function InvoiceInfoView({ formData, onChange, onPaymentTermChang
                 </div>
 
                 <div className="space-y-4">
-                    {/* Payment Terms */}
-                    <div className="grid grid-cols-12 gap-4 items-center">
-                        <label className="col-span-4 text-sm font-medium text-warmgray-700">
-                            Syarat Pembayaran <span className="text-red-500">*</span>
-                        </label>
-                        <div className="col-span-8">
-                            <PaymentTermSelect
-                                value={formData.paymentTerms}
-                                onChange={onPaymentTermChange}
-                                terms={paymentTermsList}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Due Date */}
+                    {/* Payment Terms moved to header */}
                     <div className="grid grid-cols-12 gap-4 items-center">
                         <label className="col-span-4 text-sm font-medium text-warmgray-700">Jatuh Tempo</label>
                         <div className="col-span-8">
@@ -102,6 +86,15 @@ export default function InvoiceInfoView({ formData, onChange, onPaymentTermChang
                     <div className="flex items-center gap-2 text-primary-700 font-semibold border-b border-primary-100 pb-2">
                         <Receipt className="h-5 w-5" />
                         <h3>Info Pajak</h3>
+                    </div>
+
+                    <div className="grid grid-cols-12 gap-4">
+                        <label className="col-span-4 text-sm font-medium text-warmgray-700 pt-1">Mata Uang</label>
+                        <div className="col-span-8">
+                            <div className="w-full px-3 py-2 border border-warmgray-300 rounded text-sm bg-warmgray-50 text-warmgray-500 font-medium flex items-center justify-start cursor-not-allowed select-none">
+                                IDR - Indonesian Rupiah
+                            </div>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-12 gap-4">

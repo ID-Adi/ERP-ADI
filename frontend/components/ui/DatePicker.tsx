@@ -107,7 +107,7 @@ export default function DatePicker({ value, onChange, className, placeholder, di
             <div
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 className={cn(
-                    "w-full pl-3 pr-10 py-2 border rounded text-sm transition-all font-medium flex items-center h-[38px] cursor-pointer bg-white relative",
+                    "w-full pl-3 pr-10 py-2 border rounded text-sm transition-all font-medium flex items-center h-full cursor-pointer bg-white relative",
                     isOpen
                         ? "border-primary-500 ring-1 ring-primary-500"
                         : "border-warmgray-300 hover:border-warmgray-400",

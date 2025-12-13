@@ -58,7 +58,16 @@ export default function PaymentTermSelect({ value, onChange, className = '', dis
                     className
                 )}
             >
-                <span className={!selectedTerm ? "text-warmgray-400" : ""}>
+                <span
+                    className={cn(
+                        "flex-1 text-left min-w-0 block whitespace-nowrap overflow-hidden transition-all pr-1",
+                        !selectedTerm ? "text-warmgray-400" : ""
+                    )}
+                    style={{
+                        maskImage: 'linear-gradient(to right, black 90%, transparent 100%)',
+                        WebkitMaskImage: 'linear-gradient(to right, black 90%, transparent 100%)'
+                    }}
+                >
                     {selectedTerm ? `${selectedTerm.name} (${selectedTerm.days} Hari)` : "Pilih Syarat Pembayaran"}
                 </span>
                 <ChevronDown className={cn("h-4 w-4 text-warmgray-400 transition-transform", isOpen && "transform rotate-180")} />

@@ -80,7 +80,7 @@ export default function CustomerSelect({ value, onChange, customers, placeholder
                     onFocus={() => setIsOpen(true)}
                     placeholder={placeholder}
                     className={cn(
-                        "w-full pl-3 pr-10 py-2 border rounded text-sm transition-all focus:outline-none focus:ring-1 focus:ring-primary-500",
+                        "w-full pl-3 pr-10 py-2 border rounded text-sm transition-all focus:outline-none focus:ring-1 focus:ring-primary-500 h-[38px] min-h-[38px] max-h-[38px]",
                         isOpen ? "border-primary-400 ring-1 ring-primary-400" : "border-warmgray-300"
                     )}
                 />

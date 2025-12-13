@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Search, Package, Warehouse, Calendar, X } from 'lucide-react';
 import { Button, Card, Badge, PageTransition, useToast } from '@/components/ui'; // Assuming these exist
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'; // Check import path
@@ -69,7 +69,7 @@ export default function ItemsPerWarehousePage() {
         fetchWarehouses();
     }, []);
 
-    // Fetch stocks function
+    // Fetch stocks function (without debounce)
     const fetchStocks = useCallback(async () => {
         setLoading(true);
         try {
@@ -93,19 +93,27 @@ export default function ItemsPerWarehousePage() {
         }
     }, [mode, itemSearchQuery, selectedWarehouseId, addToast]);
 
+    // Create debounced fetch function
+    const debouncedFetchStocks = useRef(
+        debounce(() => {
+            fetchStocks();
+        }, 500)
+    ).current;
+
     // Effect to trigger fetch when dependencies change
     useEffect(() => {
-        // If searching items, debounce the fetch
+        // If searching items, use debounce
         if (mode === 'ITEM') {
-            const timer = setTimeout(() => {
-                fetchStocks();
-            }, 500);
-            return () => clearTimeout(timer);
+            debouncedFetchStocks();
         } else {
             // Immediate fetch for warehouse mode changes
             fetchStocks();
         }
-    }, [fetchStocks, mode]);
+
+        return () => {
+            debouncedFetchStocks.cancel?.();
+        };
+    }, [itemSearchQuery, selectedWarehouseId, mode, fetchStocks, debouncedFetchStocks]);
 
 
     const handleRowClick = (stock: StockItem) => {
@@ -116,10 +124,10 @@ export default function ItemsPerWarehousePage() {
     return (
         <PageTransition>
 
-            <div className="flex flex-col h-[calc(100vh-6rem)] bg-white rounded-lg shadow-sm border border-surface-200 overflow-hidden">
+            <div className="flex flex-col h-[calc(100vh-6rem)] bg-white rounded-lg shadow-sm border border-warmgray-200 overflow-hidden">
 
                 {/* Toolbar */}
-                <div className="flex-none px-4 py-3 bg-surface-50 border-b border-surface-200">
+                <div className="flex-none px-4 py-3 bg-warmgray-50 border-b border-warmgray-200">
                     <div className="flex items-center gap-2 flex-wrap">
 
                         {/* Mode Selector (Dropdown) */}
@@ -131,7 +139,7 @@ export default function ItemsPerWarehousePage() {
                                     setItemSearchQuery('');
                                     setSelectedWarehouseId('');
                                 }}
-                                className="w-full h-9 pl-3 pr-8 bg-white border border-surface-300 rounded text-sm font-medium text-warmgray-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 cursor-pointer hover:border-sidebar-border transition-colors"
+                                className="w-full h-9 pl-3 pr-8 bg-white border border-warmgray-300 rounded text-sm font-medium text-warmgray-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 cursor-pointer hover:border-warmgray-400 transition-colors"
                             >
                                 <option value="ITEM">Barang</option>
                                 <option value="WAREHOUSE">Gudang</option>
@@ -152,13 +160,13 @@ export default function ItemsPerWarehousePage() {
                                     placeholder="Cari/Pilih Barang"
                                     value={itemSearchQuery}
                                     onChange={(e) => setItemSearchQuery(e.target.value)}
-                                    className="w-full h-9 pl-9 pr-3 bg-white border border-surface-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 placeholder:text-warmgray-400 transition-colors"
+                                    className="w-full h-9 pl-9 pr-3 bg-white border border-warmgray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 placeholder:text-warmgray-400 transition-colors"
                                 />
                             ) : (
                                 <select
                                     value={selectedWarehouseId}
                                     onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                                    className="w-full h-9 pl-9 pr-3 bg-white border border-surface-300 rounded text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 cursor-pointer hover:border-sidebar-border transition-colors"
+                                    className="w-full h-9 pl-9 pr-3 bg-white border border-warmgray-300 rounded text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 cursor-pointer hover:border-warmgray-400 transition-colors"
                                 >
                                     <option value="">Cari/Pilih Gudang</option>
                                     {warehouses.map(wh => (
@@ -174,7 +182,7 @@ export default function ItemsPerWarehousePage() {
                                 type="text"
                                 value="08/12/2025"
                                 readOnly
-                                className="w-full h-9 pl-3 pr-8 bg-white border border-surface-300 rounded text-sm text-warmgray-600 focus:outline-none cursor-default"
+                                className="w-full h-9 pl-3 pr-8 bg-white border border-warmgray-300 rounded text-sm text-warmgray-600 focus:outline-none cursor-default"
                             />
                             <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-warmgray-400" />
                         </div>
@@ -202,22 +210,23 @@ export default function ItemsPerWarehousePage() {
 
                 {/* Content Area (Table) */}
                 <div className="flex-1 overflow-auto bg-white">
-                    <table className="w-full text-sm text-left border-collapse">
-                        <thead className="bg-[#546e7a] text-white text-xs uppercase sticky top-0 z-10 font-semibold tracking-wider shadow-sm">
+                    <table className="w-full text-xs text-left border-collapse">
+                        <thead className="bg-warmgray-50 text-warmgray-600 sticky top-0 z-10 font-semibold border-b border-warmgray-200">
                             <tr>
-                                <th className="px-4 py-3 font-semibold border-b border-surface-200/20">Nama Barang</th>
-                                <th className="px-4 py-3 font-semibold border-b border-surface-200/20">Kode Barang</th>
-                                <th className="px-4 py-3 font-semibold border-b border-surface-200/20">Gudang</th>
-                                <th className="px-4 py-3 font-semibold border-b border-surface-200/20 text-right">Kuantitas</th>
-                                <th className="px-4 py-3 font-semibold border-b border-surface-200/20 text-right">Multi Satuan</th>
+                                <th className="py-2 px-2 w-[30px] text-center border-r border-warmgray-200">No</th>
+                                <th className="py-2 px-4 text-left border-r border-warmgray-200">Nama Barang & Jasa</th>
+                                <th className="py-2 px-4 text-left border-r border-warmgray-200">Kode</th>
+                                <th className="py-2 px-4 text-left border-r border-warmgray-200">Gudang</th>
+                                <th className="py-2 px-3 text-center border-r border-warmgray-200 w-20">Qty</th>
+                                <th className="py-2 px-4 text-left">Satuan</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-surface-100">
+                        <tbody className="divide-y divide-warmgray-100">
                             {loading ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-warmgray-500 animate-pulse">Loading data...</td></tr>
+                                <tr><td colSpan={6} className="p-8 text-center text-warmgray-500 animate-pulse">Loading data...</td></tr>
                             ) : stocks.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="p-8 text-center text-warmgray-500">
+                                    <td colSpan={6} className="p-8 text-center text-warmgray-500">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <Package className="h-8 w-8 text-warmgray-300" />
                                             <p>Belum ada data barang</p>
@@ -229,13 +238,14 @@ export default function ItemsPerWarehousePage() {
                                     <tr
                                         key={stock.id}
                                         onClick={() => handleRowClick(stock)}
-                                        className={`hover:bg-primary-50/50 cursor-pointer transition-colors group ${idx % 2 === 0 ? 'bg-white' : 'bg-surface-50/50'}`}
+                                        className={`hover:bg-primary-50 cursor-pointer transition-colors group ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafafb]'}`}
                                     >
-                                        <td className="px-4 py-3 text-warmgray-900 font-medium group-hover:text-primary-700">{stock.itemName}</td>
-                                        <td className="px-4 py-3 text-warmgray-600">{stock.itemCode}</td>
-                                        <td className="px-4 py-3 text-warmgray-600">{stock.warehouseName}</td>
-                                        <td className="px-4 py-3 text-warmgray-900 font-bold text-right">{formatNumber(stock.currentStock)}</td>
-                                        <td className="px-4 py-3 text-warmgray-600 text-right">{formatNumber(stock.currentStock)} {stock.uom}</td>
+                                        <td className="py-1.5 px-2 text-center border-r border-warmgray-100 font-semibold text-warmgray-600">{idx + 1}</td>
+                                        <td className="py-1.5 px-3 text-warmgray-900 font-medium border-r border-warmgray-100">{stock.itemName}</td>
+                                        <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{stock.itemCode}</td>
+                                        <td className="py-1.5 px-3 text-warmgray-600 border-r border-warmgray-100">{stock.warehouseName}</td>
+                                        <td className="py-1.5 px-3 text-warmgray-900 font-bold text-center border-r border-warmgray-100">{formatNumber(stock.currentStock)}</td>
+                                        <td className="py-1.5 px-3 text-warmgray-600">{stock.uom}</td>
                                     </tr>
                                 ))
                             )}
@@ -245,12 +255,12 @@ export default function ItemsPerWarehousePage() {
 
                 {/* History Modal */}
                 {showHistoryModal && selectedStock && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
 
                             {/* Modal Header */}
-                            <div className="flex items-center justify-between px-6 py-4 bg-[#1a365d] rounded-t-lg border-b border-surface-200">
-                                <h3 className="text-lg font-semibold text-white">Histori per Barang per Gudang</h3>
+                            <div className="flex items-center justify-between px-6 py-4 bg-warmgray-900 rounded-t-lg border-b border-warmgray-200">
+                                <h3 className="text-lg font-semibold text-white">Rincian Stock & History</h3>
                                 <button onClick={() => setShowHistoryModal(false)} className="text-white/80 hover:text-white transition-colors">
                                     <X className="h-5 w-5" />
                                 </button>
@@ -265,44 +275,44 @@ export default function ItemsPerWarehousePage() {
                                 {/* Date Range dummy filter */}
                                 <div className="flex items-center gap-2 mb-4 justify-center">
                                     <div className="relative">
-                                        <input type="text" value="01/12/2024" readOnly className="px-3 py-1.5 border border-gray-300 rounded text-sm w-32 text-center" />
-                                        <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+                                        <input type="text" value="01/12/2024" readOnly className="px-3 py-1.5 border border-warmgray-300 rounded text-sm w-32 text-center" />
+                                        <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-warmgray-400" />
                                     </div>
-                                    <span className="text-sm text-gray-500">s/d</span>
+                                    <span className="text-sm text-warmgray-500">s/d</span>
                                     <div className="relative">
-                                        <input type="text" value="08/12/2025" readOnly className="px-3 py-1.5 border border-gray-300 rounded text-sm w-32 text-center" />
-                                        <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+                                        <input type="text" value="08/12/2025" readOnly className="px-3 py-1.5 border border-warmgray-300 rounded text-sm w-32 text-center" />
+                                        <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-warmgray-400" />
                                     </div>
                                 </div>
 
                                 {/* History Table */}
-                                <div className="border border-surface-200 rounded-lg overflow-hidden">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-[#6b7280] text-white text-xs uppercase">
+                                <div className="border border-warmgray-200 rounded-lg overflow-hidden">
+                                    <table className="w-full text-xs text-left">
+                                        <thead className="bg-warmgray-50 text-warmgray-600 font-semibold border-b border-warmgray-200">
                                             <tr>
-                                                <th className="px-4 py-2 border-r border-white/20">Tanggal</th>
-                                                <th className="px-4 py-2 border-r border-white/20">No. Sumber #</th>
-                                                <th className="px-4 py-2 border-r border-white/20">Tipe Transaksi</th>
-                                                <th className="px-4 py-2 border-r border-white/20 text-right">Masuk</th>
-                                                <th className="px-4 py-2 border-r border-white/20 text-right">Keluar</th>
+                                                <th className="px-4 py-2 border-r border-warmgray-200">Tanggal</th>
+                                                <th className="px-4 py-2 border-r border-warmgray-200">No. Sumber</th>
+                                                <th className="px-4 py-2 border-r border-warmgray-200">Tipe Transaksi</th>
+                                                <th className="px-4 py-2 border-r border-warmgray-200 text-right">Masuk</th>
+                                                <th className="px-4 py-2 border-r border-warmgray-200 text-right">Keluar</th>
                                                 <th className="px-4 py-2 text-right">Saldo</th>
                                             </tr>
-                                            <tr className="bg-white text-gray-900 font-semibold border-b border-gray-200">
-                                                <td colSpan={3} className="px-4 py-2 text-right border-r">Saldo Awal</td>
-                                                <td className="px-4 py-2 text-right border-r">0</td>
-                                                <td className="px-4 py-2 text-right border-r">0</td>
+                                            <tr className="bg-warmgray-100 text-warmgray-900 font-semibold border-b border-warmgray-200">
+                                                <td colSpan={3} className="px-4 py-2 text-right border-r border-warmgray-200">Saldo Awal</td>
+                                                <td className="px-4 py-2 text-right border-r border-warmgray-200">0</td>
+                                                <td className="px-4 py-2 text-right border-r border-warmgray-200">0</td>
                                                 <td className="px-4 py-2 text-right">0</td>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-surface-100">
+                                        <tbody className="divide-y divide-warmgray-100">
                                             {DUMMY_HISTORY.map((row, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50">
-                                                    <td className="px-4 py-2 border-r border-gray-100">{row.date}</td>
-                                                    <td className="px-4 py-2 border-r border-gray-100">{row.ref}</td>
-                                                    <td className="px-4 py-2 border-r border-gray-100">{row.type}</td>
-                                                    <td className="px-4 py-2 text-right border-r border-gray-100">{row.in}</td>
-                                                    <td className="px-4 py-2 text-right border-r border-gray-100">{row.out}</td>
-                                                    <td className="px-4 py-2 text-right font-medium">{row.balance}</td>
+                                                <tr key={idx} className={`hover:bg-primary-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafafb]'}`}>
+                                                    <td className="px-4 py-2 border-r border-warmgray-100 text-warmgray-600">{row.date}</td>
+                                                    <td className="px-4 py-2 border-r border-warmgray-100 text-warmgray-600">{row.ref}</td>
+                                                    <td className="px-4 py-2 border-r border-warmgray-100 text-warmgray-600">{row.type}</td>
+                                                    <td className="px-4 py-2 text-right border-r border-warmgray-100 text-warmgray-900 font-medium">{row.in}</td>
+                                                    <td className="px-4 py-2 text-right border-r border-warmgray-100 text-warmgray-900 font-medium">{row.out}</td>
+                                                    <td className="px-4 py-2 text-right text-warmgray-900 font-semibold">{row.balance}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

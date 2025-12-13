@@ -260,65 +260,59 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                     <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-warmgray-400 pointer-events-none" />
 
                     {/* Product Dropdown */}
-                    <AnimatePresence>
-                        {isDropdownOpen && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                transition={{ duration: 0.2 }}
-                                className="absolute z-50 w-full mt-1 bg-white border border-warmgray-300 rounded-md shadow-lg h-80 overflow-hidden"
-                            >
-                                {isInitialLoading ? (
-                                    <div className="flex flex-col">
-                                        {[1, 2, 3, 4, 5].map((i) => (
-                                            <div key={i} className="px-4 py-3 border-b border-warmgray-50">
-                                                <div className="flex justify-between items-center">
-                                                    <div>
-                                                        <div className="h-4 w-48 rounded animate-shimmer mb-2"></div>
-                                                        <div className="h-3 w-24 rounded animate-shimmer"></div>
-                                                    </div>
-                                                    <div className="flex flex-col items-end gap-2">
-                                                        <div className="h-4 w-24 rounded animate-shimmer"></div>
-                                                        <div className="h-3 w-16 rounded animate-shimmer"></div>
-                                                    </div>
+                    {isDropdownOpen && (
+                        <div
+                            className="absolute z-50 w-full mt-1 bg-white border border-warmgray-300 rounded-md shadow-lg h-80 overflow-hidden"
+                        >
+                            {isInitialLoading ? (
+                                <div className="flex flex-col">
+                                    {[1, 2].map((i) => (
+                                        <div key={i} className="px-4 py-3 border-b border-warmgray-50">
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <div className="h-4 w-48 rounded animate-shimmer mb-2"></div>
+                                                    <div className="h-3 w-24 rounded animate-shimmer"></div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-2">
+                                                    <div className="h-4 w-24 rounded animate-shimmer"></div>
+                                                    <div className="h-3 w-16 rounded animate-shimmer"></div>
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
-                                ) : products.length > 0 ? (
-                                    <InfiniteLoader
-                                        isRowLoaded={isRowLoaded}
-                                        loadMoreRows={loadMoreRows}
-                                        rowCount={totalCount}
-                                        threshold={5}
-                                    >
-                                        {({ onRowsRendered, registerChild }) => (
-                                            <AutoSizer>
-                                                {({ width, height }) => (
-                                                    <List
-                                                        width={width}
-                                                        height={height}
-                                                        onRowsRendered={onRowsRendered}
-                                                        ref={registerChild}
-                                                        rowCount={totalCount}
-                                                        rowHeight={cache.rowHeight}
-                                                        rowRenderer={rowRenderer}
-                                                        deferredMeasurementCache={cache}
-                                                        overscanRowCount={10}
-                                                    />
-                                                )}
-                                            </AutoSizer>
-                                        )}
-                                    </InfiniteLoader>
-                                ) : (
-                                    <div className="p-4 text-center text-sm text-warmgray-500">
-                                        Barang tidak ditemukan.
-                                    </div>
-                                )}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : products.length > 0 ? (
+                                <InfiniteLoader
+                                    isRowLoaded={isRowLoaded}
+                                    loadMoreRows={loadMoreRows}
+                                    rowCount={totalCount}
+                                    threshold={5}
+                                >
+                                    {({ onRowsRendered, registerChild }) => (
+                                        <AutoSizer>
+                                            {({ width, height }) => (
+                                                <List
+                                                    width={width}
+                                                    height={height}
+                                                    onRowsRendered={onRowsRendered}
+                                                    ref={registerChild}
+                                                    rowCount={totalCount}
+                                                    rowHeight={cache.rowHeight}
+                                                    rowRenderer={rowRenderer}
+                                                    deferredMeasurementCache={cache}
+                                                    overscanRowCount={10}
+                                                />
+                                            )}
+                                        </AutoSizer>
+                                    )}
+                                </InfiniteLoader>
+                            ) : (
+                                <div className="p-4 text-center text-sm text-warmgray-500">
+                                    Barang tidak ditemukan.
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 <button className="p-2 border border-warmgray-300 rounded bg-white text-warmgray-600 hover:bg-warmgray-50 transition-colors shadow-sm">
@@ -411,6 +405,6 @@ export default function InvoiceItemsView({ items, onItemsChange, readOnly = fals
                 initialData={editingItem}
                 mode={editingItem ? 'edit' : 'add'}
             />
-        </div>
+        </div >
     );
 }
